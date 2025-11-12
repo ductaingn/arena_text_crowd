@@ -18,10 +18,14 @@ from .velocity_field_generation.velocity_field_generation_pipeline import (
     VelocityFieldGenerationPipeline as VFGP,
     VelocityFieldGenerationPipelineConfig as VFGPConfig,
 )
-
-from .
-
-from .utils.utils import collision_checker, get_box
+from .utils.field import Field
+from .utils.utils import collision_checker, get_box_ll
+from .input_models.scenario import Scenario
+from .input_models.prompt import PromptCanonicalizer
+from .input_models.semantic.semantic_object import Rectangle
+from .input_models.constants import AllSemanticObjects
+from .simulator.agent import Agent
+from .simulator.field_env import FieldEnv, GroupField
 
 
 @attrs.define
@@ -59,6 +63,9 @@ class CrowdGenerationPipeline:
 
     sg_distr_gen_pipeline: SGDGP = attrs.field(init=False)
     vel_field_gen_pipeline: VFGP = attrs.field(init=False)
+    canonicalizer: PromptCanonicalizer = attrs.field(
+        init=False, default=PromptCanonicalizer()
+    )
 
     @sg_distr_gen_pipeline.default
     def _sg_distr_gen_pipeline_factory(self):
@@ -126,11 +133,25 @@ class CrowdGenerationPipeline:
             config=self.vel_field_gen_config,
         )
 
-    def generate(self, semantic_map, prompt):
+    def get_canonicalized_des(self, prompt: str):
+        """
+        Get the canonicalized description text of groups
+        """
+        return self.canonicalizer.canonicalize(prompt)
+
+    def get_group_size(self, canonicalized_des: str):
+        return self.canonicalizer.get_group_size(canonicalized_des)
+
+    def generate(self, scenario: Scenario, prompt: str):
+        semantic_map = scenario.get_semantic_map()
+        canonicalized_descriptions = self.get_canonicalized_des(prompt)
+        group_sizes = self.get_group_size(canonicalized_descriptions)
+        group_n = len(group_sizes)
+
         print("Inferring start and goal distributions...")
         pred_group_sgdistrs = self.sg_distr_gen_pipeline.inference(
             smaps=copy.deepcopy(np.array(semantic_map)),
-            prompts=copy.deepcopy(prompt),
+            prompts=copy.deepcopy(canonicalized_descriptions),
             num_inference_steps=self.sg_distr_gen_config.num_inference_steps,
             guidance_scale=self.sg_distr_gen_config.guidance_scale,
             save_path=None,
@@ -143,7 +164,7 @@ class CrowdGenerationPipeline:
         print("Inferring fields...")
         pred_group_fields = self.vel_field_gen_pipeline.inference(
             smaps=copy.deepcopy(np.array(semantic_map)),
-            prompts=copy.deepcopy(prompt),
+            prompts=copy.deepcopy(canonicalized_descriptions),
             sg_distrs=copy.deepcopy(pred_group_sgdistrs),
             num_inference_steps=self.vel_field_gen_config.num_inference_steps,
             guidance_scale=self.vel_field_gen_config.guidance_scale,
@@ -156,10 +177,9 @@ class CrowdGenerationPipeline:
             self.vel_field_gen_config.map_size,
             self.vel_field_gen_config.map_size,
         ]
-        grid_width = gt_scenario["wind_size"][0] / grid_size[0]
-        base_field = Base_Field()
-        base_field.reset(scenario=copy.deepcopy(gt_scenario), grid_width=grid_width)
-        grid_map = base_field.grid["grid_map"]
+        grid_width = semantic_map.window_size[0] / grid_size[0]
+        base_field = Field(scenario=..., grid_width=grid_width)
+        grid_map = base_field.grid.grid_map
         obs_coords = np.argwhere(grid_map == 1)
         for group_id in range(group_n):
             pred_group_fields[group_id] = np.nan_to_num(
@@ -176,29 +196,19 @@ class CrowdGenerationPipeline:
             )
 
         # do simulation
-        return self.Sim2D_WithField(
-            scenario=copy.deepcopy(gt_scenario),
+        return self.get_agent_trajectories(
+            scenario=scenario,
             group_distrs=pred_group_sgdistrs,
-            group_sizes=gt_group_sizes,
+            group_sizes=group_sizes,
             group_fields=pred_group_fields,
-            group_paths=gt_group_paths,
-            show_fields=False,
-            show_paths=True,
-            record_video_path=None,
-            save_sim_path=None,
         )
 
-    def Sim2D_WithField(
+    def get_agent_trajectories(
         self,
-        scenario,
+        scenario: Scenario,
         group_distrs,
         group_sizes,
         group_fields,
-        group_paths,
-        show_fields=True,
-        show_paths=True,
-        record_video_path=None,
-        save_sim_path=None,
     ):
         agent_n = np.sum(np.array(group_sizes))
         agent_radius = self.generation_pipeline_config.agent_radius
@@ -211,18 +221,12 @@ class CrowdGenerationPipeline:
             [124, 79, 13],
             [255, 192, 203],
             [128, 0, 128],
-        ][0:group_n]
+        ][
+            0:group_n
+        ]  # TODO: Remove
 
         grid_width = scenario["wind_size"][0] / len(group_fields[0])
-        grid_size = [len(group_fields[0]), len(group_fields[0][0])]
-        base_field = Base_Field()
-        base_field.reset(scenario, grid_width)
-        # visualize the fields
-        if self.generation_pipeline_config.visual and show_fields:
-            for grp_id in range(group_n):
-                base_field.field_visualization(
-                    field=group_fields[grp_id], guidance=None
-                )
+        base_field = Field(scenario, grid_width)
 
         def sample_poses(
             current_poses,
@@ -275,81 +279,70 @@ class CrowdGenerationPipeline:
             return pos_list
 
         # set group fields
-        gfields_for_ctrl = []
+        gfields_for_ctrl: List[GroupField] = []
         tp = 0
         for gid in range(group_n):
             gfields_for_ctrl.append(
-                {
-                    "agent_ids": list(range(tp, tp + group_sizes[gid])),
-                    "field": copy.deepcopy(group_fields[gid]),
-                    "grid": copy.deepcopy(base_field.grid),
-                }
+                GroupField(
+                    agent_ids=list(range(tp, tp + group_sizes[gid])),
+                    field=group_fields[gid],
+                    grid=base_field.grid,
+                )
             )
             tp += group_sizes[gid]
 
-        # set all agents' params and reset the scenario
-        fld_env = Field_Env(
-            agent_num=agent_n,
-            visual=self.generation_pipeline_config.visual,
-            draw_scale=1.0,
-        )
+        # Set all agents' params and reset the scenario
         # Add boundary to scenario_bound
         scenario_bound = copy.deepcopy(scenario)
-        if "obs_list" not in scenario_bound.keys():
-            scenario_bound["obs_list"] = []
-        wind_size = copy.deepcopy(scenario_bound["wind_size"])
+        window_size = copy.deepcopy(scenario_bound.scenario_config.window_size)
         thick = 50
-        scenario_bound["obs_list"].append(
-            {
-                "type": "rectangle",
-                "params": {
-                    "vertexes": get_box_ll(
-                        x=wind_size[0] + thick * 2, y=thick, lowerleft=(-thick, -thick)
-                    )
-                },
-                "attributes": {},
-            }
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=window_size[0] + thick * 2,
+                height=thick,
+                vertexes=get_box_ll(
+                    x=window_size[0] + thick * 2,
+                    y=thick,
+                    lowerleft=(-thick, -thick),
+                ),
+            )
         )
-        scenario_bound["obs_list"].append(
-            {
-                "type": "rectangle",
-                "params": {
-                    "vertexes": get_box_ll(
-                        x=wind_size[0] + thick * 2,
-                        y=thick,
-                        lowerleft=(-thick, wind_size[1]),
-                    )
-                },
-                "attributes": {},
-            }
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=window_size[0] + thick * 2,
+                height=thick,
+                vertexes=get_box_ll(
+                    x=window_size[0] + thick * 2,
+                    y=thick,
+                    lowerleft=(-thick, window_size[1]),
+                ),
+            )
         )
-        scenario_bound["obs_list"].append(
-            {
-                "type": "rectangle",
-                "params": {
-                    "vertexes": get_box_ll(
-                        x=thick, y=wind_size[1] + thick * 2, lowerleft=(-thick, -thick)
-                    )
-                },
-                "attributes": {},
-            }
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=thick,
+                height=window_size[1] + thick * 2,
+                vertexes=get_box_ll(
+                    x=thick,
+                    y=window_size[1] + thick * 2,
+                    lowerleft=(-thick, -thick),
+                ),
+            )
         )
-        scenario_bound["obs_list"].append(
-            {
-                "type": "rectangle",
-                "params": {
-                    "vertexes": get_box_ll(
-                        x=thick,
-                        y=wind_size[1] + thick * 2,
-                        lowerleft=(wind_size[0], -thick),
-                    )
-                },
-                "attributes": {},
-            }
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=thick,
+                height=window_size[1] + thick * 2,
+                vertexes=get_box_ll(
+                    x=thick,
+                    y=window_size[1] + thick * 2,
+                    lowerleft=(window_size[0], -thick),
+                ),
+            )
         )
-        all_obs = fld_env.get_all_obstacles_from_scenario(copy.deepcopy(scenario_bound))
+        all_obs = scenario_bound.get_all_obstacles()
 
-        agent_params = {"init_agent_params": []}
+        agent_list: List[Agent] = []
         for gid in range(group_n):
             add_agent_n = group_sizes[gid]
             agent_pos_list = sample_poses(
@@ -358,7 +351,7 @@ class CrowdGenerationPipeline:
                 distr=group_distrs[gid][:, :, 0],
                 grid_width=grid_width,
                 rand_buffer=self.generation_pipeline_config.pos_rand_range,
-                boundary=scenario["wind_size"],
+                boundary=scenario.scenario_config.window_size,
                 obs_list=copy.deepcopy(all_obs),
                 sample_num=add_agent_n,
             )
@@ -368,114 +361,58 @@ class CrowdGenerationPipeline:
                 distr=group_distrs[gid][:, :, 1],
                 grid_width=grid_width,
                 rand_buffer=self.generation_pipeline_config.pos_rand_range,
-                boundary=scenario["wind_size"],
+                boundary=scenario.scenario_config.window_size,
                 obs_list=copy.deepcopy(all_obs),
                 sample_num=add_agent_n,
             )
             for idx in range(add_agent_n):
-                ai_params = copy.deepcopy(AGNET_PARAM_DEFAULT)
-                ai_params["pos"] = agent_pos_list[idx]
-                ai_params["goal_pos"] = agent_goal_list[idx]
-                ai_params["radius"] = agent_radius
-                ai_params["pref_speed"] = agent_prefV
-                ai_params["color"] = groups_colors[gid]
-                agent_params["init_agent_params"].append(copy.deepcopy(ai_params))
+                agent = Agent(
+                    pos=agent_pos_list[idx],
+                    goal_pos=agent_goal_list[idx],
+                    radius=agent_radius,
+                    pref_speed=agent_prefV,
+                    color=groups_colors[gid],
+                )
+                agent_list.append(copy.deepcopy(agent))
 
         ### Start simulation
-        fld_env.reset(
-            scenario=copy.deepcopy(scenario_bound),
-            agent_setting=copy.deepcopy(agent_params),
-        )
-        max_steps = -1
-        for gid, (group_path_v_i, group_path_e_i) in enumerate(group_paths):
-            path_len_group_i = 0
-            for edge_i in group_path_e_i:
-                line_p1 = copy.deepcopy(
-                    scenario["roadmap"]["vertexes"][edge_i["edge"][0]]
-                )
-                line_p2 = copy.deepcopy(
-                    scenario["roadmap"]["vertexes"][edge_i["edge"][1]]
-                )
-                path_len_group_i += np.linalg.norm(
-                    np.array(line_p2) - np.array(line_p1)
-                )
-                if self.generation_pipeline_config.visual and show_paths:
-                    fld_env.viewer.add_line(
-                        p1=line_p1, p2=line_p2, color=groups_colors[gid]
-                    )
-            max_steps = max(
-                max_steps,
-                int(
-                    path_len_group_i
-                    * self.generation_pipeline_config.max_path_len_ratio
-                    / self.generation_pipeline_config.agent_prefV
-                ),
-            )
-
-        # # wait at beginning
-        # if self.generation_pipeline_config.visual:
-        #     while(1):
-        #         fld_env.render()
-        #         if fld_env.viewer.entered:
-        #             break
+        fld_env = FieldEnv(scenario=scenario, agent_num=agent_n)
+        fld_env.reset(scenario=copy.deepcopy(scenario_bound))
 
         # warm up
-        for stp_id in range(self.generation_pipeline_config.warm_up_steps):
-            if self.generation_pipeline_config.visual:
-                fld_env.render()
-                # time.sleep(0.003)
-            super(Field_Env, fld_env).perform_action(np.zeros((agent_n, 2)).tolist())
+        for _ in range(self.generation_pipeline_config.warm_up_steps):
+            fld_env.perform_action_ORCAEnv(np.zeros((agent_n, 2)).tolist())
         for agt_id in range(agent_n):
-            fld_env.agent_current_infor[agt_id]["traj_history"] = (
-                fld_env.agent_current_infor[agt_id]["traj_history"][
-                    : -self.generation_pipeline_config.warm_up_steps
-                ]
-            )
-            assert len(fld_env.agent_current_infor[agt_id]["traj_history"]) == 0
+            fld_env.agent_dict[agt_id].traj_history = fld_env.agent_dict[
+                agt_id
+            ].traj_history[: -self.generation_pipeline_config.warm_up_steps]
+            assert len(fld_env.agent_dict[agt_id].traj_history) == 0
 
-        video_frms = []
         step = 0
-        all_agent_trajs = [[] for i_ in range(group_n)]
+        all_agent_trajs = [[] * group_n]
         removed_agent_n = 0
-        while 1:
-            if self.generation_pipeline_config.visual:
-                fld_env.render()
-                time.sleep(0.006)
-                if record_video_path is not None and not fld_env.viewer.closed:
-                    loc = fld_env.viewer.get_location()
-                    im_cv2 = np.array(
-                        screenshot.Screenshot().capture(
-                            (
-                                loc[0],
-                                loc[1],
-                                fld_env.viewer.width,
-                                fld_env.viewer.height,
-                            )
-                        )
-                    )[:, :, 0:3]
-                    video_frms.append(im_cv2)
-
+        while True:
             # remove agents that reach the goal or get out of the scenario, and record its trajectory
             for gid in range(group_n):
-                for aid in gfields_for_ctrl[gid]["agent_ids"]:
+                for aid in gfields_for_ctrl[gid].agent_ids:
                     if (
                         np.linalg.norm(
-                            np.array(fld_env.agent_current_infor[aid]["pos"])
-                            - np.array(fld_env.agent_current_infor[aid]["goal_pos"])
+                            np.array(fld_env.agent_dict[aid].pos)
+                            - np.array(fld_env.agent_dict[aid].goal_pos)
                         )
                         < self.generation_pipeline_config.reach_dis
-                        or fld_env.agent_current_infor[aid]["pos"][0] <= 0
-                        or fld_env.agent_current_infor[aid]["pos"][0]
-                        >= scenario["wind_size"][0]
-                        or fld_env.agent_current_infor[aid]["pos"][1] <= 0
-                        or fld_env.agent_current_infor[aid]["pos"][1]
-                        >= scenario["wind_size"][1]
+                        or fld_env.agent_dict[aid].pos[0] <= 0
+                        or fld_env.agent_dict[aid].pos[0]
+                        >= scenario.scenario_config.window_size[0]
+                        or fld_env.agent_dict[aid].pos[1] <= 0
+                        or fld_env.agent_dict[aid].pos[1]
+                        >= scenario.scenario_config.window_size[1]
                     ):
                         all_agent_trajs[gid].append(
                             {
                                 "agent_id": aid,
                                 "agent_trajs": np.array(
-                                    fld_env.agent_current_infor[aid]["traj_history"]
+                                    fld_env.agent_dict[aid].traj_history
                                 )[:, 0, :],
                             }
                         )
@@ -486,7 +423,7 @@ class CrowdGenerationPipeline:
             fld_env.perform_action_fast(gfields_for_ctrl)
 
             step += 1
-            if removed_agent_n >= agent_n or step >= max_steps:
+            if removed_agent_n >= agent_n:
                 break
 
         if self.generation_pipeline_config.visual and not fld_env.viewer.closed:
@@ -494,34 +431,14 @@ class CrowdGenerationPipeline:
 
         # handle the rest agents
         for gid in range(group_n):
-            for aid in gfields_for_ctrl[gid]["agent_ids"]:
+            for aid in gfields_for_ctrl[gid].agent_ids:
                 all_agent_trajs[gid].append(
                     {
                         "agent_id": aid,
-                        "agent_trajs": np.array(
-                            fld_env.agent_current_infor[aid]["traj_history"]
-                        )[:, 0, :],
+                        "agent_trajs": np.array(fld_env.agent_dict[aid].traj_history)[
+                            :, 0, :
+                        ],
                     }
                 )
-
-        # save record video
-        if self.generation_pipeline_config.visual and record_video_path is not None:
-            video_wt = cv2.VideoWriter(
-                record_video_path,
-                cv2.VideoWriter_fourcc("P", "I", "M", "1"),
-                280 / agent_prefV,
-                (fld_env.viewer.width, fld_env.viewer.height),
-            )
-            for frm in video_frms:
-                video_wt.write(frm)
-            video_wt.release()
-        # save simulation data
-        if save_sim_path is not None:
-            sim_data = {
-                "scenario": scenario,
-                "agent_num": agent_n,
-                "agent_infor": fld_env.agent_current_infor,
-            }
-            np.save(save_sim_path, sim_data)
 
         return all_agent_trajs

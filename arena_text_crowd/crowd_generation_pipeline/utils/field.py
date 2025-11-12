@@ -1,33 +1,36 @@
+from typing import Tuple
 import copy
-from Simulators.ORCA_Env import ORCA_Env
-from Viewer.Viewer import Viewer
-from Utils import *
+
+import attrs
+
 import numpy as np
+
 import shapely.geometry as geom
+
 import rasterio
 from rasterio.features import geometry_mask
 
+from ..input_models.scenario import Scenario
+from ..utils.visualization import Viewer
+
+
+@attrs.define
+class Grid:
+    grid_width: int
+    grid_size: Tuple[int, int]
+    grid_map: np.ndarray
+    grid_infor: np.ndarray
+
 
 class Field:
-    def __init__(self, scenario, grid_width):
+    def __init__(self, scenario: Scenario, grid_width: int):
         self.scenario = copy.deepcopy(scenario)
         self.grid_width = grid_width
-        self.grid = (
-            self.space_discretization()
-        )  # keys: wind_size, grid_width, grid_size, grid_map, grid_infor
+        self.grid = self.space_discretization()
 
-    def reset(self, scenario, grid_width):
-        self.scenario = copy.deepcopy(scenario)
-        self.grid_width = grid_width
-        self.grid = (
-            self.space_discretization()
-        )  # keys: wind_size, grid_width, grid_size, grid_map, grid_infor
-
-    def space_discretization(self):
+    def space_discretization(self) -> Grid:
         grid = {}
-        wind_size = copy.deepcopy(self.scenario["wind_size"])
-        grid["wind_size"] = copy.deepcopy(wind_size)
-        grid["grid_width"] = self.grid_width
+        wind_size = copy.deepcopy(self.scenario.scenario_config.window_size)
         assert (int(wind_size[0] / self.grid_width)) * self.grid_width == wind_size[0]
         assert (int(wind_size[1] / self.grid_width)) * self.grid_width == wind_size[1]
         grid_size = [
@@ -39,7 +42,7 @@ class Field:
         grid_map = np.zeros((grid_size[0], grid_size[1]), dtype=int)
         grid_infor = []
 
-        obs_list = ORCA_Env.get_all_obstacles_from_scenario(scenario_in=self.scenario)
+        obs_list = self.scenario.get_all_obstacles()
         if len(obs_list) != 0:
             obs_polys = []
             for obs_i in obs_list:
@@ -79,18 +82,21 @@ class Field:
                 )
             grid_infor.append(grid_infor_rowi)
         grid_infor = np.array(grid_infor)
-        grid["grid_map"] = grid_map
-        grid["grid_infor"] = grid_infor
 
-        return grid
+        return Grid(
+            grid_width=self.grid_width,
+            grid_size=grid_size,
+            grid_map=grid_map,
+            grid_infor=grid_infor,
+        )
 
     def get_field(self, guidance, constrains=None):
         raise NotImplementedError
 
     def field_visualization(self, field, guidance=None):
         # visualization
-        wind_size = copy.deepcopy(self.grid["wind_size"])
-        grid_size = copy.deepcopy(self.grid["grid_size"])
+        wind_size = copy.deepcopy(self.scenario.scenario_config.window_size)
+        grid_size = copy.deepcopy(self.grid.grid_size)
         grid_width = self.grid_width
 
         viewer = Viewer(wind_size=tuple((int(wind_size[0]), int(wind_size[1]))))
@@ -142,31 +148,26 @@ class Field:
 
 
 if __name__ == "__main__":
-    scenario_test = {
-        "wind_size": [800, 800],
-        "obs_list": [
-            {
-                "type": "rectangle",
-                "params": {
-                    "vertexes": [[100, 400], [200, 400], [200, 500], [100, 500]]
-                },
-                "attributes": {},
-            },
-            {
-                "type": "triangle",
-                "params": {"vertexes": [[150, 150], [250, 150], [150, 250]]},
-                "attributes": {},
-            },
-            {
-                "type": "circle",
-                "params": {"center": [400, 400], "radius": 50},
-                "attributes": {},
-            },
-        ],
-        "zebra_crossing_list": [],
-        "passages_list": [],
-        "areas_list": [],
-    }
+    from ..input_models.scenario import ScenarioConfig
+    from ..input_models.constants import AllSemanticObjects
+    from ..input_models.semantic.semantic_object import Rectangle, Triangle, Circle
+
+    scenario_test = Scenario(
+        ScenarioConfig(),
+        obstacle_dict={
+            AllSemanticObjects.RECTANGLE: [
+                Rectangle(
+                    width=None,
+                    height=None,
+                    vertexes=[[100, 400], [200, 400], [200, 500], [100, 500]],
+                )
+            ],
+            AllSemanticObjects.TRIANGLE: [
+                Triangle(vertexes=[[150, 150], [250, 150], [150, 250]])
+            ],
+            AllSemanticObjects.CIRCLE: [Circle(center=[400.0, 400.0], radius=50.0)],
+        },
+    )
     grid_width = 20.0
 
     fld = Field(scenario_test, grid_width)

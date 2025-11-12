@@ -1,10 +1,9 @@
 import os
 import copy
 from typing import List
+from tqdm.auto import tqdm
 
 import attrs
-
-import cv2
 
 import numpy as np
 
@@ -78,9 +77,7 @@ class StartGoalDistrGenerationPipeline:
 
         prompts_ = prompts
 
-        smaps_full = []
-        for smp_id in range(len(smaps)):
-            smaps_full.append(self.add_background_class(np.array(smaps[smp_id])))
+        smaps_full = [self.add_background_class(np.array(smap)) for smap in smaps]
         smaps_ = torch.from_numpy(np.array(smaps_full)).to(
             torch_device, dtype=weight_dtype
         )
@@ -124,8 +121,6 @@ class StartGoalDistrGenerationPipeline:
         latents = latents.to(torch_device, dtype=weight_dtype)
         latents = latents * self.scheduler.init_noise_sigma
 
-        from tqdm.auto import tqdm
-
         self.scheduler.set_timesteps(num_inference_steps)
         for t in tqdm(self.scheduler.timesteps):
             latent_model_input = torch.cat((latents, smaps_), dim=1)
@@ -149,44 +144,9 @@ class StartGoalDistrGenerationPipeline:
 
         sgdistrs_all = []
         for dt_id in range(batch_size_):
-            smap_i = np.array(
-                torch.permute(smaps_[dt_id].clone().detach().cpu(), (1, 2, 0))
-            )
             sg_distr_i = np.array(
                 torch.permute(latents[dt_id].clone().detach().cpu(), (1, 2, 0))
             )
             sgdistrs_all.append(copy.deepcopy(sg_distr_i))
-            text_i = prompts_[dt_id]
-
-            from Utils import cv_visual_map
-
-            sg_colors = np.array([[0, 255, 0], [0, 0, 255]])
-            map_colors = np.concatenate(
-                [np.random.randint(0, 255, (len(smap_i[0][0]) - 2, 3)), sg_colors],
-                axis=0,
-            )
-            smap_cvimg = cv_visual_map(
-                smap_i, colors=map_colors, save_nm=None, show=False
-            )
-            distr_cvimg = cv_visual_map(
-                sg_distr_i, colors=sg_colors, save_nm=None, show=False
-            )
-            interval = np.ones((len(smap_cvimg), 5, 3)) * 255
-            cat_img = cv2.hconcat(
-                [interval, smap_cvimg, interval, distr_cvimg, interval]
-            )
-            cat_img_resize = cv2.resize(
-                cat_img, None, fx=5, fy=5, interpolation=cv2.INTER_CUBIC
-            )
-            if show:
-                print(text_i)
-                cv2.imshow("img", cat_img_resize / 255)
-                cv2.waitKey(0)
-            if save_path is not None:
-                cv2.imwrite(
-                    os.path.join(save_path, "dt_" + str(dt_id) + ".jpg"), cat_img_resize
-                )
-        if save_path is not None:
-            np.save(os.path.join(save_path, "texts.npy"), {"texts": prompts_})
 
         return np.array(sgdistrs_all)
