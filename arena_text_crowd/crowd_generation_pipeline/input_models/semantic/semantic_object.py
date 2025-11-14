@@ -15,10 +15,10 @@ from ...utils.utils import vector_rotation, vectors_rotation, get_box, get_circl
 
 @attrs.define
 class SemanticObject(ABC):
-    polygon: Optional[geom.Polygon]
-    points: List = attrs.field(init=False)
-    edges: List = attrs.field(init=False)
-    graph_box: List = attrs.field(init=False)
+    polygon: Optional[geom.Polygon] = attrs.field(default=None, kw_only=True)
+    points: List = attrs.field(init=False, default=[])
+    edges: List = attrs.field(init=False, default=[])
+    graph_box: List = attrs.field(init=False, default=[])
     points_idx_inRM: List = attrs.field(init=False, default=[])
     edges_idx_inRM: List = attrs.field(init=False, default=[])
 
@@ -57,7 +57,7 @@ class Rectangle(SemanticObject):
     height: float
     vertexes: List
     graph_buffer: int = 20
-    center: List = attrs.field(init=False)
+    center: List = attrs.field(init=False, default=[])
 
     @classmethod
     def random(cls, size_range, area) -> "Rectangle":
@@ -112,7 +112,7 @@ class Rectangle(SemanticObject):
 class Triangle(SemanticObject):
     vertexes: List
     graph_buffer: int = 20
-    center: List = attrs.field(init=False)
+    center: List = attrs.field(init=False, default=[])
 
     @classmethod
     def random(cls, size_range, area) -> "Triangle":

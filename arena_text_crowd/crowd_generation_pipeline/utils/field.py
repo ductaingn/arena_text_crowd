@@ -102,15 +102,15 @@ class Field:
         viewer = Viewer(wind_size=tuple((int(wind_size[0]), int(wind_size[1]))))
         for i in range(grid_size[0]):
             for j in range(grid_size[1]):
-                if self.grid["grid_infor"][i][j]["free"] == 1:
+                if self.grid.grid_infor[i][j]["free"] == 1:
                     viewer.add_obs(
-                        np.array(self.grid["grid_infor"][i][j]["box"])
+                        np.array(self.grid.grid_infor[i][j]["box"])
                         .reshape(1, -1)[0]
                         .tolist()
                     )
                 else:
                     viewer.add_obs(
-                        np.array(self.grid["grid_infor"][i][j]["box"])
+                        np.array(self.grid.grid_infor[i][j]["box"])
                         .reshape(1, -1)[0]
                         .tolist(),
                         [200, 200, 200],
@@ -122,7 +122,7 @@ class Field:
                 vec = field[i][j]
                 arrow = np.array([[0, 0], vec])
                 arrow = (arrow - vec / 2) * grid_width
-                arrow += np.array(self.grid["grid_infor"][i][j]["center"])
+                arrow += np.array(self.grid.grid_infor[i][j]["center"])
                 arrows.append(arrow)
                 arrow_colors.append([0, 0, 0])
         viewer.set_arrows(np.array(arrows), np.array(arrow_colors))
@@ -172,5 +172,5 @@ if __name__ == "__main__":
 
     fld = Field(scenario_test, grid_width)
     fld.field_visualization(
-        np.zeros((fld.grid["grid_size"][0], fld.grid["grid_size"][1], 2)), None
+        np.zeros((fld.grid.grid_size[0], fld.grid.grid_size[1], 2)), None
     )

@@ -40,7 +40,7 @@ class ObjectConfig:
 
 @attrs.define
 class ScenarioConfig:
-    window_size: Tuple[int, int] = (1024, 1024)
+    window_size: Tuple[int, int] = (800, 800)
     bound_srk_scale: float = 1 / 5
     safe_dis: float = 80.0
     objects: Dict[AllSemanticObjects, ObjectConfig] = {
@@ -68,7 +68,7 @@ class Scenario:
         AllSemanticObjects.ENTRANCE: [],
         AllSemanticObjects.EXIT: [],
     }
-    extended: bool = attrs.field(init=False)
+    extended: bool = attrs.field(init=False, default=False)
     window_size_sub: Tuple[float, float] = attrs.field(init=False)
 
     @window_size_sub.default
