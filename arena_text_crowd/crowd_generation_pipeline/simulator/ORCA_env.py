@@ -1,7 +1,7 @@
 import copy
 import time
 import math
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 
@@ -16,10 +16,10 @@ class ORCAEnv:
     def __init__(
         self,
         scenario: Scenario,
-        agent_num: int,
+        agent_list: List[Agent],
         draw_scale: float = 1.0,
     ):
-        self.agent_num = agent_num
+        self.agent_num = len(agent_list)
         self.draw_scale = draw_scale
 
         self.sensor = None
@@ -29,10 +29,11 @@ class ORCAEnv:
         self.time_step = 0
 
         self.sim = self.sim_prepare()
-        for _ in range(self.agent_num):
-            agent_idx = self.add_agent_sim(0, 0)
+        for agent in agent_list:
+            agent_idx = self.add_agent_sim(*agent.pos) # TODO: Vefiry
             self.agent_id_list.append(agent_idx)
-            self.agent_dict.update({agent_idx: Agent(agent_idx)})
+            agent.id = agent_idx
+            self.agent_dict.update({agent_idx: agent})
 
         self.reset(
             scenario=copy.deepcopy(scenario),
@@ -68,7 +69,7 @@ class ORCAEnv:
 
     def reset_sim_scenario(self, scenario: Scenario):
         self.sim.clearObstacle()
-        obs_list = scenario.get_all_obstacles(scenario_in=copy.deepcopy(scenario))
+        obs_list = scenario.get_all_obstacles()
         for obs_i in obs_list:
             self.sim.addObstacle(make_ccw([tuple(p) for p in obs_i]))
         self.sim.processObstacles()
@@ -95,8 +96,8 @@ class ORCAEnv:
         for agent_idx, agent_id in enumerate(self.agent_id_list):
             curr_p_i = self.sim.getAgentPosition(agent_id)
             self.agent_dict[agent_id].pos = np.array(curr_p_i).tolist()
-            self.agent_dict[agent_id].add_pos_to_trajectory(
-                [pre_ps[agent_idx].tolist(), actions[agent_idx].tolist()]
+            self.agent_dict[agent_id].add_history(
+                pre_ps[agent_idx].tolist(), actions[agent_idx].tolist()
             )
 
     ######------ functions related to agent setting ------######
@@ -116,7 +117,8 @@ class ORCAEnv:
         self.sim.setAgentTimeHorizonObst(agent_id, agent.timeH_Obst)
         self.sim.setAgentRadius(agent_id, agent.radius)
         self.sim.setAgentMaxSpeed(agent_id, agent.maxSpd)
-        self.sim.setAgentVelocity(agent_id, agent.vlcty)
+        if agent.vlcty is not None:
+            self.sim.setAgentVelocity(agent_id, agent.vlcty)
 
     def set_agent_position(self, a_idx, pos):
         agent_id = self.agent_id_list[a_idx]

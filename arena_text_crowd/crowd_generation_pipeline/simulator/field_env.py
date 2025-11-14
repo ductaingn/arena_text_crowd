@@ -14,6 +14,7 @@ import pyglet.window.key
 from ..utils.utils import interp_grid_closest_4, interp_grid_fast
 from ..utils.field import Field, Grid
 from ..input_models.scenario import Scenario
+from .agent import Agent
 from .ORCA_env import ORCAEnv
 
 
@@ -28,9 +29,9 @@ class FieldEnv(ORCAEnv):
     def __init__(
         self,
         scenario: Scenario,
-        agent_num: int,
+        agent_list: List[Agent],
     ):
-        super(FieldEnv, self).__init__(scenario=scenario, agent_num=agent_num)
+        super(FieldEnv, self).__init__(scenario=scenario, agent_list=agent_list)
         self.agent_prefvs = []
         for agent_idx in range(self.agent_num):
             self.agent_prefvs.append(
@@ -295,7 +296,7 @@ if __name__ == "__main__":
         agent_params["init_agent_params"].append(copy.deepcopy(ai_params))
 
     scenario_test = {
-        "wind_size": [800, 800],
+        "wind_size": [1024, 1024],
         "obs_list": [
             {
                 "type": "rectangle",

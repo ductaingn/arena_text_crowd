@@ -43,7 +43,7 @@ class SemanticObject(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def set_obj_graph(self) -> Tuple[List, List, List]:
+    def set_obj_graph(self):
         raise NotImplementedError
 
     @abstractmethod
@@ -146,11 +146,9 @@ class Triangle(SemanticObject):
             [[p[0], p[1]] for p in copy.deepcopy(self.vertexes)]
         ).buffer(self.graph_buffer - 1e-3, cap_style=3, join_style=2)
 
-        return (
-            points_list,
-            edges_list,
-            copy.deepcopy(np.array(list(tri_inner.exterior.coords)[:-1]).tolist()),
-        )
+        self.points = points_list
+        self.edges = edges_list
+        self.graph_box = copy.deepcopy(np.array(list(tri_inner.exterior.coords)[:-1]).tolist())
 
     def set_infor(self):
         rec_vs = np.array(copy.deepcopy(self.vertexes))
@@ -199,11 +197,9 @@ class Circle(SemanticObject):
             self.graph_buffer - 1e-3, cap_style=3, join_style=2
         )
 
-        return (
-            points_list,
-            edges_list,
-            copy.deepcopy(np.array(list(box_inner.exterior.coords)[:-1]).tolist()),
-        )
+        self.points = points_list
+        self.edges = edges_list
+        self.graph_box = copy.deepcopy(np.array(list(box_inner.exterior.coords)[:-1]).tolist())
 
     def set_infor(self):
         circle_edges = np.array(
@@ -225,9 +221,9 @@ class ZebraCrossing(SemanticObject):
     zb_line_width: float
     rotation: int  # degree
     graph_buffer: int = 20
-    whole_box: List = attrs.field(init=False)
-    in_out_lines: List = attrs.field(init=False)
-    zebra_lines_boxes: List = attrs.field(init=False)
+    whole_box: List = attrs.field(init=False, default=[])
+    in_out_lines: List = attrs.field(init=False, default=[])
+    zebra_lines_boxes: List = attrs.field(init=False, default=[])
 
     @classmethod
     def random(cls, size_range, area) -> "ZebraCrossing":
@@ -295,7 +291,9 @@ class ZebraCrossing(SemanticObject):
         obj_buffer_inner.width += (obj_buffer_inner.graph_buffer - 1e-3) * 2
         obj_buffer_inner.height += (obj_buffer_inner.graph_buffer - 1e-3) * 2
         obj_buffer_inner.set_infor()
-        return points_list, edges_list, copy.deepcopy(obj_buffer_inner.whole_box)
+        self.points = points_list
+        self.edges = edges_list 
+        self.graph_box = copy.deepcopy(obj_buffer_inner.whole_box)
 
     def set_infor(self):  # TODO: Test
         w_ = self.width
@@ -347,10 +345,10 @@ class Passage(SemanticObject):
     passage_width: float
     rotation: int  # degree
     graph_buffer: int = 20
-    whole_box: List = attrs.field(init=False)
-    in_out_lines: List = attrs.field(init=False)
-    free_space: List = attrs.field(init=False)
-    obstacles: List = attrs.field(init=False)
+    whole_box: List = attrs.field(init=False, default=[])
+    in_out_lines: List = attrs.field(init=False, default=[])
+    free_space: List = attrs.field(init=False, default=[])
+    obstacles: List = attrs.field(init=False, default=[])
 
     @classmethod
     def random(cls, size_range, area) -> "Passage":
@@ -389,8 +387,8 @@ class Passage(SemanticObject):
         obj_buffer = copy.deepcopy(self)
         obj_buffer.width += obj_buffer.graph_buffer * 2
         obj_buffer.height += obj_buffer.graph_buffer * 2
-        obj_ex_infor = obj_buffer.set_infor()
-        for l_i in obj_ex_infor["in_out_lines"]:
+        obj_buffer.set_infor()
+        for l_i in obj_buffer.in_out_lines:
             alpha_ = 0.5
             points_list.append(
                 (np.array(l_i[0]) * alpha_ + np.array(l_i[1]) * (1 - alpha_)).tolist()
@@ -402,7 +400,9 @@ class Passage(SemanticObject):
         obj_buffer_inner.height += (obj_buffer_inner.graph_buffer - 1e-3) * 2
         obj_buffer_inner.set_infor()
 
-        return points_list, edges_list, copy.deepcopy(obj_buffer_inner.whole_box)
+        self.points = points_list
+        self.edges = edges_list
+        self.graph_box = copy.deepcopy(obj_buffer_inner.whole_box)
 
     def set_infor(self):  # TODO: Test
         w_ = self.width
@@ -463,8 +463,8 @@ class Entrance(SemanticObject):
     height: float
     center: Tuple[float, float]
     rotation: int  # degree
-    graph_buffer: None
-    whole_box: List
+    graph_buffer = None
+    whole_box: List = attrs.field(init=False, default=[])
 
     @classmethod
     def random(cls, size_range, area) -> "Entrance":
@@ -499,9 +499,9 @@ class Entrance(SemanticObject):
         )
 
     def set_obj_graph(self):
-        points_list = [copy.deepcopy(self.center)]
-        edges_list = []
-        return points_list, edges_list, []
+        self.points = [copy.deepcopy(self.center)]
+        self.edges = []
+        self.graph_box = []
 
     def set_infor(self):
         w_ = self.width
@@ -518,7 +518,60 @@ class Entrance(SemanticObject):
 
 
 @attrs.define
-class Exit(Entrance):
+class Exit(SemanticObject):
+    width: float
+    height: float
+    center: Tuple[float, float]
+    rotation: int  # degree
+    graph_buffer = None
+    whole_box: List = attrs.field(init=False, default=[])
+
     @classmethod
     def random(cls, size_range, area) -> "Exit":
-        return super().random(size_range, area)
+        w = random.uniform(size_range[0], size_range[1])
+        h = w * 1.0
+        edge_id = random.randint(0, 3)
+        if edge_id == 0:
+            ctr = [random.uniform(area[0][0], area[0][1]), area[1][0] - h / 2]
+            rot = 0
+        elif edge_id == 1:
+            ctr = [random.uniform(area[0][0], area[0][1]), area[1][1] + h / 2]
+            rot = 0
+        elif edge_id == 2:
+            ctr = [area[0][0] - h / 2, random.uniform(area[1][0], area[1][1])]
+            rot = 90
+        else:
+            ctr = [area[0][1] + h / 2, random.uniform(area[1][0], area[1][1])]
+            rot = 90
+        box_ = vectors_rotation(
+            np.array(get_box(w, h, [0.0, 0.0])).reshape(-1, 2).tolist(),
+            rot / 180.0 * math.pi,
+        )
+        box_ = (np.array(box_) + np.array(ctr)).tolist()
+        obj_poly = geom.Polygon([[p[0], p[1]] for p in box_])
+
+        return Exit(
+            width=w,
+            height=h,
+            center=ctr,
+            rotation=rot,
+            polygon=obj_poly,
+        )
+
+    def set_obj_graph(self):
+        self.points = [copy.deepcopy(self.center)]
+        self.edges = []
+        self.graph_box = []
+
+    def set_infor(self):
+        w_ = self.width
+        h_ = self.height
+        whole_box = np.array(
+            [[-w_ / 2, -h_ / 2], [w_ / 2, -h_ / 2], [w_ / 2, h_ / 2], [-w_ / 2, h_ / 2]]
+        )
+        for vc_id in range(len(whole_box)):
+            whole_box[vc_id] = vector_rotation(
+                whole_box[vc_id], self.rotation / 180 * math.pi
+            )
+        whole_box += np.array(self.center)
+        self.whole_box = whole_box.tolist()

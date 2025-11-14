@@ -27,7 +27,7 @@ class VelocityFieldGenerationPipelineConfig:
 
     pretrained_model_name_or_path: str = "runwayml/stable-diffusion-v1-5"
     revision = None
-    output_dir: str = "Models_Server_ForTest/Field-Full-V2/checkpoint-270000/"
+    output_dir: str = "/home/linh/ductai_nguyen_ws/Text-Crowd/Language_Crowd_Animation/Models_Server_ForTest/Field-Full-V2/checkpoint-270000/unet"
     logging_dir: str = "logs"
     tracker_project_name: str = "Field"
     report_to: str = "tensorboard"

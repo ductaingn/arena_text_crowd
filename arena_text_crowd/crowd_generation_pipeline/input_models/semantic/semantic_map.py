@@ -34,7 +34,9 @@ class SemanticMap:
     passages_list: List[Passage]
     areas_dict: Dict[AllSemanticObjects, List[Entrance | Exit]]
 
-    def get_feature(self, obj_semantic_name):
+    def get_feature(self, obj_semantic_name: str | AllSemanticObjects):
+        if isinstance(obj_semantic_name, AllSemanticObjects):
+            obj_semantic_name = obj_semantic_name.value
         all_obj_smtcs = [obj.value for obj in AllSemanticObjects]
         all_obj_smtcs = copy.deepcopy(all_obj_smtcs)
 
@@ -45,20 +47,20 @@ class SemanticMap:
         objsm_id = all_obj_smtcs.index(obj_semantic_name)
 
         # Create one-hot feature
-        feature_ = np.zeros(len(all_obj_smtcs))
+        feature_ = np.zeros(len(all_obj_smtcs)-1) # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles 
         feature_[objsm_id] = 1
 
         return feature_
 
     def from_arena_world(self): ...
 
-    def from_text_crowd_scenario(self):
+    def from_text_crowd_scenario(self) -> np.ndarray:
         grid_size = [
             int(self.window_size[0] / EnvironmentParams.grid_width_map),
             int(self.window_size[1] / EnvironmentParams.grid_width_map),
         ]
 
-        semantic_map_ = np.zeros((grid_size[0], grid_size[1], len(AllSemanticObjects)))
+        semantic_map_ = np.zeros((grid_size[0], grid_size[1], len(AllSemanticObjects)-1)) # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles 
 
         transform_ = rasterio.transform.from_bounds(
             0,

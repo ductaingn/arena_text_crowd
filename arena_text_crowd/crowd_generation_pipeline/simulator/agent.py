@@ -21,6 +21,8 @@ class Agent:
     draw_traj: bool = False
     draw_sensor: bool = False
     traj_history: List = []
+    action_history: List = []
 
-    def add_pos_to_trajectory(self, px: float, py: float):
-        self.traj_history.append([px, py])
+    def add_history(self, current_position: Tuple[float, float], action: Tuple[float, float]):
+        self.traj_history.append(current_position)
+        self.action_history.append(action)

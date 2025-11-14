@@ -6,7 +6,7 @@ from .utils import get_arrow, get_box, get_circle
 
 
 class Viewer(pyglet.window.Window):
-    def __init__(self, wind_size=(800, 800), checker=(800, 800, [140, 140, 140])):
+    def __init__(self, wind_size=(1024, 1024), checker=(1024, 1024, [140, 140, 140])):
         config = pyglet.gl.Config(sample_buffers=1, samples=16)
         super(Viewer, self).__init__(
             config=config,

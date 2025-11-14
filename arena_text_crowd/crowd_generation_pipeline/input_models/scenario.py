@@ -40,7 +40,7 @@ class ObjectConfig:
 
 @attrs.define
 class ScenarioConfig:
-    window_size: Tuple[int, int] = (800, 800)
+    window_size: Tuple[int, int] = (1024, 1024)
     bound_srk_scale: float = 1 / 5
     safe_dis: float = 80.0
     objects: Dict[AllSemanticObjects, ObjectConfig] = {
@@ -86,7 +86,7 @@ class Scenario:
         return (w_rg, h_rg)
 
     @classmethod
-    def random(cls, scenario_config: ScenarioConfig):
+    def random(cls, scenario_config: ScenarioConfig) -> "Scenario":
         scenario_ = Scenario(scenario_config)
 
         boundary = geom.LineString(
@@ -105,23 +105,22 @@ class Scenario:
         ).buffer(1, cap_style=3, join_style=2)
         obj_polys_list = [boundary]
 
-        for obj, obj_config in scenario_config.objects.items():
-            obj: AllSemanticObjects
+        for obj_type, obj_config in scenario_config.objects.items():
             obj_num = obj_config.num
             obj_size_range = copy.deepcopy(obj_config.size_range)
             for r_i in range(obj_num):
                 # get obj (except for attributes)
                 loop_cnt = 0
-                while 1:
+                while True:
                     loop_cnt += 1
                     if loop_cnt >= 30000:
                         return None
                     if (
-                        obj == AllSemanticObjects.ENTRANCE
-                        or obj == AllSemanticObjects.EXIT
+                        obj_type == AllSemanticObjects.ENTRANCE
+                        or obj_type == AllSemanticObjects.EXIT
                     ):
                         semantic_obj: Entrance | Exit = scenario_.get_rand_obj(
-                            obj,
+                            obj_type,
                             obj_size_range,
                             [
                                 copy.deepcopy(scenario_.window_size_sub[0]),
@@ -129,10 +128,11 @@ class Scenario:
                             ],
                         )
                         jd = True
-                        for a_i in (
+                        for area in (
                             scenario_.areas_dict[AllSemanticObjects.ENTRANCE]
                             + scenario_.areas_dict[AllSemanticObjects.EXIT]
                         ):
+                            area_type = AllSemanticObjects.ENTRANCE if isinstance(area, Entrance) else AllSemanticObjects.EXIT
                             dis_lim = (
                                 (
                                     scenario_config.window_size[0]
@@ -153,12 +153,12 @@ class Scenario:
                             )
                             dis_lim = max(
                                 dis_lim,
-                                scenario_config.objects[a_i].size_range[1] / 2
-                                + scenario_config.objects[obj].size_range[1] / 2,
+                                scenario_config.objects[area_type].size_range[1] / 2
+                                + scenario_config.objects[obj_type].size_range[1] / 2,
                             )
                             if (
                                 np.linalg.norm(
-                                    np.array(semantic_obj.center) - np.array(a_i.center)
+                                    np.array(semantic_obj.center) - np.array(area.center)
                                 )
                                 < dis_lim
                             ):
@@ -168,7 +168,7 @@ class Scenario:
                             break
                     else:
                         semantic_obj = scenario_.get_rand_obj(
-                            obj,
+                            obj_type,
                             copy.deepcopy(obj_size_range),
                             [
                                 copy.deepcopy(scenario_.window_size_sub[0]),
@@ -182,6 +182,7 @@ class Scenario:
                             break
 
                 # set obj's attributes
+                semantic_obj.set_infor()
                 semantic_obj.set_obj_graph()
                 obj_polys_list.append(semantic_obj.polygon)
 
@@ -224,13 +225,13 @@ class Scenario:
         elif isinstance(semantic_obj, Passage):
             self.passages_list.append(semantic_obj)
         elif isinstance(semantic_obj, Entrance):
-            self.areas_dict[AllSemanticObjects.ENTRANCE].append(Entrance)
+            self.areas_dict[AllSemanticObjects.ENTRANCE].append(semantic_obj)
         elif isinstance(semantic_obj, Exit):
             self.areas_dict[AllSemanticObjects.EXIT].append(semantic_obj)
         else:
             raise NotImplementedError
 
-    def get_semantic_map(self) -> SemanticMap:
+    def get_semantic_map(self) -> np.ndarray:
         if not self.extended:
             self.extend()
 

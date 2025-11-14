@@ -1,5 +1,6 @@
 from typing import List
 import time
+import random
 
 import os
 
@@ -118,6 +119,7 @@ class PromptCanonicalizer:
         )
 
     def canonicalize(self, user_prompt: str) -> List[str]:
+        return 'A small group enters from the entrance, circles around the circle, exits through the exit.'
         print("Canonicalizing prompt ...")
         start = time.time()
         messages = [user_prompt]
@@ -129,6 +131,11 @@ class PromptCanonicalizer:
         end = time.time()
         print(f"Canonicalizing done, took: {end-start:.1f}s")
 
-        return answer.splitlines()
+        return answer
 
-    def get_group_size(self, canonicalized_des: str) -> List[int]: ...
+    def get_group_size(self, canonicalized_des: str) -> List[int]:
+        # TODO: process this
+        group_n = len(canonicalized_des)
+        group_size = [random.randint(1, 10)]*group_n
+
+        return group_size

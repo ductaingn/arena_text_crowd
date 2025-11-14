@@ -10,22 +10,22 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from diffusers import DDPMScheduler, UNet2DConditionModel
 
-from .start_goal_distribution_generation.start_goal_distribution_generation_pipeline import (
+from arena_text_crowd.crowd_generation_pipeline.start_goal_distribution_generation.start_goal_distribution_generation_pipeline import (
     StartGoalDistrGenerationPipeline as SGDGP,
     StartGoalDistrGenerationPipelineConfig as SGDGPConfig,
 )
-from .velocity_field_generation.velocity_field_generation_pipeline import (
+from arena_text_crowd.crowd_generation_pipeline.velocity_field_generation.velocity_field_generation_pipeline import (
     VelocityFieldGenerationPipeline as VFGP,
     VelocityFieldGenerationPipelineConfig as VFGPConfig,
 )
-from .utils.field import Field
-from .utils.utils import collision_checker, get_box_ll
-from .input_models.scenario import Scenario
-from .input_models.prompt import PromptCanonicalizer
-from .input_models.semantic.semantic_object import Rectangle
-from .input_models.constants import AllSemanticObjects
-from .simulator.agent import Agent
-from .simulator.field_env import FieldEnv, GroupField
+from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
+from arena_text_crowd.crowd_generation_pipeline.utils.utils import collision_checker, get_box_ll
+from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import Scenario, ScenarioConfig
+from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import PromptCanonicalizer
+from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import Rectangle
+from arena_text_crowd.crowd_generation_pipeline.input_models.constants import AllSemanticObjects
+from arena_text_crowd.crowd_generation_pipeline.simulator.agent import Agent
+from arena_text_crowd.crowd_generation_pipeline.simulator.field_env import FieldEnv, GroupField
 
 
 @attrs.define
@@ -143,10 +143,11 @@ class CrowdGenerationPipeline:
         return self.canonicalizer.get_group_size(canonicalized_des)
 
     def generate(self, scenario: Scenario, prompt: str):
-        semantic_map = scenario.get_semantic_map()
-        canonicalized_descriptions = self.get_canonicalized_des(prompt)
+        semantic_map = np.array([scenario.get_semantic_map()])
+        canonicalized_descriptions = [self.get_canonicalized_des(prompt)]
         group_sizes = self.get_group_size(canonicalized_descriptions)
         group_n = len(group_sizes)
+        print(canonicalized_descriptions)
 
         print("Inferring start and goal distributions...")
         pred_group_sgdistrs = self.sg_distr_gen_pipeline.inference(
@@ -177,8 +178,8 @@ class CrowdGenerationPipeline:
             self.vel_field_gen_config.map_size,
             self.vel_field_gen_config.map_size,
         ]
-        grid_width = semantic_map.window_size[0] / grid_size[0]
-        base_field = Field(scenario=..., grid_width=grid_width)
+        grid_width = scenario.scenario_config.window_size[0] / grid_size[0]
+        base_field = Field(scenario=scenario, grid_width=grid_width)
         grid_map = base_field.grid.grid_map
         obs_coords = np.argwhere(grid_map == 1)
         for group_id in range(group_n):
@@ -225,7 +226,7 @@ class CrowdGenerationPipeline:
             0:group_n
         ]  # TODO: Remove
 
-        grid_width = scenario["wind_size"][0] / len(group_fields[0])
+        grid_width = scenario.scenario_config.window_size[0] / len(group_fields[0])
         base_field = Field(scenario, grid_width)
 
         def sample_poses(
@@ -240,8 +241,8 @@ class CrowdGenerationPipeline:
         ):
             distr_1d = np.array(distr).reshape(1, -1)[0]
             pos_list = []
-            for smp_id in range(sample_num):
-                while 1:
+            for _ in range(sample_num):
+                while True:
                     pos_loc = random.choices(
                         list(range(len(distr_1d))), weights=distr_1d, k=1
                     )[0]
@@ -376,17 +377,17 @@ class CrowdGenerationPipeline:
                 agent_list.append(copy.deepcopy(agent))
 
         ### Start simulation
-        fld_env = FieldEnv(scenario=scenario, agent_num=agent_n)
+        fld_env = FieldEnv(scenario=scenario, agent_list=agent_list)
         fld_env.reset(scenario=copy.deepcopy(scenario_bound))
 
         # warm up
-        for _ in range(self.generation_pipeline_config.warm_up_steps):
-            fld_env.perform_action_ORCAEnv(np.zeros((agent_n, 2)).tolist())
-        for agt_id in range(agent_n):
-            fld_env.agent_dict[agt_id].traj_history = fld_env.agent_dict[
-                agt_id
-            ].traj_history[: -self.generation_pipeline_config.warm_up_steps]
-            assert len(fld_env.agent_dict[agt_id].traj_history) == 0
+        # for _ in range(self.generation_pipeline_config.warm_up_steps):
+        #     fld_env.perform_action_ORCAEnv(np.zeros((agent_n, 2)).tolist())
+        # for agt_id in range(agent_n):
+        #     fld_env.agent_dict[agt_id].traj_history = fld_env.agent_dict[
+        #         agt_id
+        #     ].traj_history[: -self.generation_pipeline_config.warm_up_steps]
+        #     assert len(fld_env.agent_dict[agt_id].traj_history) == 0
 
         step = 0
         all_agent_trajs = [[] * group_n]
@@ -413,17 +414,20 @@ class CrowdGenerationPipeline:
                                 "agent_id": aid,
                                 "agent_trajs": np.array(
                                     fld_env.agent_dict[aid].traj_history
-                                )[:, 0, :],
+                                ),
+                                "agent_actions": np.array(
+                                    fld_env.agent_dict[aid].action_history
+                                )
                             }
                         )
                         fld_env.set_agent_position(aid, [-1e5, -1e5])
-                        gfields_for_ctrl[gid]["agent_ids"].remove(aid)
+                        gfields_for_ctrl[gid].agent_ids.remove(aid)
                         removed_agent_n += 1
 
             fld_env.perform_action_fast(gfields_for_ctrl)
 
             step += 1
-            if removed_agent_n >= agent_n:
+            if removed_agent_n >= agent_n or step>1000: # TODO: Manage lifetime
                 break
 
         # handle the rest agents
@@ -432,10 +436,29 @@ class CrowdGenerationPipeline:
                 all_agent_trajs[gid].append(
                     {
                         "agent_id": aid,
-                        "agent_trajs": np.array(fld_env.agent_dict[aid].traj_history)[
-                            :, 0, :
-                        ],
+                        "agent_trajs": np.array(fld_env.agent_dict[aid].traj_history),
+                        "agent_actions": np.array(
+                            fld_env.agent_dict[aid].action_history
+                        )
                     }
                 )
 
         return all_agent_trajs
+
+
+if __name__ == "__main__":
+    from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import Triangle, Circle
+    dummy_scenario = Scenario.random(ScenarioConfig())
+    while (
+        len(dummy_scenario.areas_dict[AllSemanticObjects.ENTRANCE]) == 0 or
+        len(dummy_scenario.areas_dict[AllSemanticObjects.EXIT]) == 0
+    ):
+        dummy_scenario = Scenario.random(ScenarioConfig())
+        print("Generating scenario")
+    crowd_generation_pipeline = CrowdGenerationPipeline(
+        CrowdGenerationPipelineConfig(), SGDGPConfig(), VFGPConfig()
+    )
+    agents_trajectories = crowd_generation_pipeline.generate(
+        scenario=dummy_scenario, prompt="A group of people walking around"
+    )
+    print(agents_trajectories)

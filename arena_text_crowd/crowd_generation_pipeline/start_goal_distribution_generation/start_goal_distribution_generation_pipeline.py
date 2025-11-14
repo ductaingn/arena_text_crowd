@@ -23,7 +23,7 @@ class StartGoalDistrGenerationPipelineConfig:
 
     pretrained_model_name_or_path: str = "runwayml/stable-diffusion-v1-5"
     revision = None
-    output_dir: str = "Models_Server_ForTest/SgDistr-Full-V1/checkpoint-67000/"
+    output_dir: str = "/home/linh/ductai_nguyen_ws/Text-Crowd/Language_Crowd_Animation/Models_Server_ForTest/SgDistr-Full-V1/checkpoint-67000/unet"
     logging_dir: str = "logs"
     tracker_project_name: str = "SgDistr"
     report_to: str = "tensorboard"
