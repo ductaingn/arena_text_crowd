@@ -203,7 +203,7 @@ class Scenario:
             return Circle.random(size_range=objsize_range, area=area_)
         elif obj_type == AllSemanticObjects.ZEBRA_CROSSING:
             return ZebraCrossing.random(size_range=objsize_range, area=area_)
-        elif obj_type == AllSemanticObjects.PASSAGE_FREE:  # TODO: Verify
+        elif obj_type == AllSemanticObjects.PASSAGE:
             return Passage.random(size_range=objsize_range, area=area_)
         elif obj_type == AllSemanticObjects.ENTRANCE:
             return Entrance.random(size_range=objsize_range, area=area_)

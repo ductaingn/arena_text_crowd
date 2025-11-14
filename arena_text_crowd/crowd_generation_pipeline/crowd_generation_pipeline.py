@@ -426,9 +426,6 @@ class CrowdGenerationPipeline:
             if removed_agent_n >= agent_n:
                 break
 
-        if self.generation_pipeline_config.visual and not fld_env.viewer.closed:
-            fld_env.viewer.close()
-
         # handle the rest agents
         for gid in range(group_n):
             for aid in gfields_for_ctrl[gid].agent_ids:
