@@ -7,17 +7,8 @@ import numpy as np
 
 import shapely.geometry as geom
 
-import rasterio
-from rasterio.features import geometry_mask
-
 from ..utils.utils import get_box_ll, poly_collision_check
-from .roadmap import Roadmap
-from .constants import (
-    AllSemanticObjects,
-    EnvironmentParams,
-    ParametersMode,
-    PathConstrains,
-)
+from .constants import AllSemanticObjects
 from .semantic.semantic_map import SemanticMap
 from .semantic.semantic_object import (
     SemanticObject,
@@ -132,7 +123,11 @@ class Scenario:
                             scenario_.areas_dict[AllSemanticObjects.ENTRANCE]
                             + scenario_.areas_dict[AllSemanticObjects.EXIT]
                         ):
-                            area_type = AllSemanticObjects.ENTRANCE if isinstance(area, Entrance) else AllSemanticObjects.EXIT
+                            area_type = (
+                                AllSemanticObjects.ENTRANCE
+                                if isinstance(area, Entrance)
+                                else AllSemanticObjects.EXIT
+                            )
                             dis_lim = (
                                 (
                                     scenario_config.window_size[0]
@@ -158,7 +153,8 @@ class Scenario:
                             )
                             if (
                                 np.linalg.norm(
-                                    np.array(semantic_obj.center) - np.array(area.center)
+                                    np.array(semantic_obj.center)
+                                    - np.array(area.center)
                                 )
                                 < dis_lim
                             ):
@@ -242,44 +238,6 @@ class Scenario:
             self.passages_list,
             self.areas_dict,
         ).from_text_crowd_scenario()
-
-    def get_sg_distb(self, sg_areas):
-        if not self.extended:
-            self.extend()
-
-        grid_size = [
-            int(self.scenario_config.window_size[0] / EnvironmentParams.grid_width_map),
-            int(self.scenario_config.window_size[1] / EnvironmentParams.grid_width_map),
-        ]
-        sg_distribution = np.zeros((grid_size[0], grid_size[1], 2))
-        transform_ = rasterio.transform.from_bounds(
-            0,
-            0,
-            self.scenario_config.window_size[0],
-            self.scenario_config.window_size[1],
-            grid_size[0],
-            grid_size[1],
-        )
-
-        for obj_id in range(len(self.areas_dict)):
-            if obj_id == sg_areas["start_area"] or obj_id == sg_areas["goal_area"]:
-                poly_ = geom.Polygon(
-                    copy.deepcopy(self.areas_list[obj_id]["ext_params"]["whole_box"])
-                )
-                geom_mask = rasterio.features.geometry_mask(
-                    [poly_],
-                    out_shape=(grid_size[1], grid_size[0]),
-                    transform=transform_,
-                    all_touched=True,
-                )
-                geom_mask = np.flip(geom_mask, axis=0).transpose(1, 0)
-                sg_distribution[~geom_mask] = (
-                    np.array([1, 0])
-                    if obj_id == sg_areas["start_area"]
-                    else np.array([0, 1])
-                )
-
-        return sg_distribution
 
     def extend(self):
         if self.extended is True:

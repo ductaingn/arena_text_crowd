@@ -20,14 +20,9 @@ from ..utils import cv_visual_map, cv_visual_field
 
 @attrs.define
 class VelocityFieldGenerationPipelineConfig:
-    data_path: str = "./Dataset/Data_Full_V2/"
-    obj_nums: List = [5, 4, 3, 2, 1, 0]
-    group_nums: List = [1, 2, 3]
-    data_scale: float = 1.0
-
+    unet_dir: str
     pretrained_model_name_or_path: str = "runwayml/stable-diffusion-v1-5"
     revision = None
-    output_dir: str = "/home/linh/ductai_nguyen_ws/Text-Crowd/Language_Crowd_Animation/Models_Server_ForTest/Field-Full-V2/checkpoint-270000/unet"
     logging_dir: str = "logs"
     tracker_project_name: str = "Field"
     report_to: str = "tensorboard"

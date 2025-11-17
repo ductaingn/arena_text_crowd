@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>arena_text_crowd_bridge</name>
+  <name>arena_text_crowd</name>
   <version>0.0.1</version>
-  <description>Arena-Text-Crowd bridge</description>
+  <description>Arena-Text-Crowd implementation</description>
   <maintainer email="ductaingn.015203@gmail.com">Duc Tai Nguyen</maintainer>
   <license>MIT</license>
 

@@ -19,13 +19,28 @@ from arena_text_crowd.crowd_generation_pipeline.velocity_field_generation.veloci
     VelocityFieldGenerationPipelineConfig as VFGPConfig,
 )
 from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
-from arena_text_crowd.crowd_generation_pipeline.utils.utils import collision_checker, get_box_ll
-from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import Scenario, ScenarioConfig
-from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import PromptCanonicalizer
-from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import Rectangle
-from arena_text_crowd.crowd_generation_pipeline.input_models.constants import AllSemanticObjects
+from arena_text_crowd.crowd_generation_pipeline.utils.utils import (
+    collision_checker,
+    get_box_ll,
+)
+from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import (
+    Scenario,
+    ScenarioConfig,
+)
+from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import (
+    PromptCanonicalizer,
+)
+from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
+    Rectangle,
+)
+from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
+    AllSemanticObjects,
+)
 from arena_text_crowd.crowd_generation_pipeline.simulator.agent import Agent
-from arena_text_crowd.crowd_generation_pipeline.simulator.field_env import FieldEnv, GroupField
+from arena_text_crowd.crowd_generation_pipeline.simulator.field_env import (
+    FieldEnv,
+    GroupField,
+)
 
 
 @attrs.define
@@ -87,7 +102,7 @@ class CrowdGenerationPipeline:
             subfolder="scheduler",
         )
         sg_unet = UNet2DConditionModel.from_pretrained(
-            self.sg_distr_gen_config.output_dir, subfolder="unet", use_safetensors=True
+            self.sg_distr_gen_config.unet_dir, subfolder="unet", use_safetensors=True
         )
         sg_unet.set_attention_slice("max")
 
@@ -119,7 +134,7 @@ class CrowdGenerationPipeline:
             subfolder="scheduler",
         )
         sg_unet = UNet2DConditionModel.from_pretrained(
-            self.vel_field_gen_config.output_dir,
+            self.vel_field_gen_config.unet_dir,
             subfolder="unet",
             use_safetensors=True,
         )
@@ -417,7 +432,7 @@ class CrowdGenerationPipeline:
                                 ),
                                 "agent_actions": np.array(
                                     fld_env.agent_dict[aid].action_history
-                                )
+                                ),
                             }
                         )
                         fld_env.set_agent_position(aid, [-1e5, -1e5])
@@ -427,7 +442,7 @@ class CrowdGenerationPipeline:
             fld_env.perform_action_fast(gfields_for_ctrl)
 
             step += 1
-            if removed_agent_n >= agent_n or step>1000: # TODO: Manage lifetime
+            if removed_agent_n >= agent_n or step > 1000:  # TODO: Manage lifetime
                 break
 
         # handle the rest agents
@@ -439,7 +454,7 @@ class CrowdGenerationPipeline:
                         "agent_trajs": np.array(fld_env.agent_dict[aid].traj_history),
                         "agent_actions": np.array(
                             fld_env.agent_dict[aid].action_history
-                        )
+                        ),
                     }
                 )
 
@@ -447,11 +462,15 @@ class CrowdGenerationPipeline:
 
 
 if __name__ == "__main__":
-    from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import Triangle, Circle
+    from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
+        Triangle,
+        Circle,
+    )
+
     dummy_scenario = Scenario.random(ScenarioConfig())
     while (
-        len(dummy_scenario.areas_dict[AllSemanticObjects.ENTRANCE]) == 0 or
-        len(dummy_scenario.areas_dict[AllSemanticObjects.EXIT]) == 0
+        len(dummy_scenario.areas_dict[AllSemanticObjects.ENTRANCE]) == 0
+        or len(dummy_scenario.areas_dict[AllSemanticObjects.EXIT]) == 0
     ):
         dummy_scenario = Scenario.random(ScenarioConfig())
         print("Generating scenario")
