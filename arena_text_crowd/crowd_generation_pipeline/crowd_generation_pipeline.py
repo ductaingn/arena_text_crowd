@@ -237,9 +237,7 @@ class CrowdGenerationPipeline:
             [124, 79, 13],
             [255, 192, 203],
             [128, 0, 128],
-        ][
-            0:group_n
-        ]  # TODO: Remove
+        ][0:group_n]  # TODO: Remove
 
         grid_width = scenario.scenario_config.window_size[0] / len(group_fields[0])
         base_field = Field(scenario, grid_width)
