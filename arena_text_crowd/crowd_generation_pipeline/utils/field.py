@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 import copy
 
 import attrs
@@ -22,10 +22,46 @@ class Grid:
     grid_infor: np.ndarray
 
 
+# # Example guidance:
+# guidance = {
+#     "type": "lines",
+#     "params": {
+#         "lines":[[[50, 50], [50, 600]],[[50, 600], [300, 600]], [[300, 600], [300, 250]], [[300, 250], [500, 250]]],
+#         # "width": 150,   # influence width
+#         # "decay_rate": 0.9,   # decay rate of the guidance field along width
+#     }
+# }
+@attrs.define
+class Guidance:
+    type: str
+    lines: List[List[List[int]]] | np.ndarray
+    width: int | None = None
+    decay_rate: float | None = None
+
+
+# # Example constrains:
+# constrains = {
+#     "filter_path_n_average": ,
+#     "closed_path_flag": False,
+#     "pt_step_len": 20,  # pt_step_len
+#     "smooth_condition": 600,
+# }
+@attrs.define
+class Constrains:
+    filter_path_n_average: int = 0  # Number of points to use in the average filter (it is forced to be an odd number) - if 0 the path is not filtered
+    closed_path_flag: bool = False  # Flag to indicate if the path is closed or not
+    pt_step_len: int = 20  # The length between two neighbor points
+    smooth_condition: int = 600  # The smooth condition for trajectory smoothing
+
+
+@attrs.define
 class Field:
-    def __init__(self, scenario: Scenario, grid_width: int):
-        self.scenario = copy.deepcopy(scenario)
-        self.grid_width = grid_width
+    scenario: Scenario
+    grid_width: int
+    grid: Grid = attrs.field(init=False)
+
+    def __attrs_post_init__(self):
+        self.scenario = copy.deepcopy(self.scenario)
         self.grid = self.space_discretization()
 
     def space_discretization(self) -> Grid:
@@ -90,10 +126,10 @@ class Field:
             grid_infor=grid_infor,
         )
 
-    def get_field(self, guidance, constrains=None):
+    def get_field(self, guidance: Guidance, constrains: Constrains | None = None):
         raise NotImplementedError
 
-    def field_visualization(self, field, guidance=None):
+    def field_visualization(self, field, guidance: Guidance | None = None):
         # visualization
         wind_size = copy.deepcopy(self.scenario.scenario_config.window_size)
         grid_size = copy.deepcopy(self.grid.grid_size)
@@ -127,8 +163,8 @@ class Field:
                 arrow_colors.append([0, 0, 0])
         viewer.set_arrows(np.array(arrows), np.array(arrow_colors))
 
-        if guidance is not None and guidance["type"] == "lines":
-            lines = guidance["params"]["lines"]
+        if guidance is not None and guidance.type == "lines":
+            lines = guidance.lines
             trajs = []
             traj_colors = []
             for lidx, line_i in enumerate(lines):
@@ -153,7 +189,7 @@ if __name__ == "__main__":
     from ..input_models.semantic.semantic_object import Rectangle, Triangle, Circle
 
     scenario_test = Scenario(
-        ScenarioConfig(),
+        ScenarioConfig(window_size=[800, 800]),
         obstacle_dict={
             AllSemanticObjects.RECTANGLE: [
                 Rectangle(
