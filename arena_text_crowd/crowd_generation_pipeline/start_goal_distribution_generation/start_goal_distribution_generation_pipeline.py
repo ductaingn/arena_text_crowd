@@ -145,3 +145,63 @@ class StartGoalDistrGenerationPipeline:
             sgdistrs_all.append(copy.deepcopy(sg_distr_i))
 
         return np.array(sgdistrs_all)
+
+
+if __name__ == "__main__":
+    from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import (
+        Scenario,
+        ScenarioConfig,
+    )
+
+    sg_distr_gen_config = StartGoalDistrGenerationPipelineConfig(
+        unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/SgDistr-Full-V1/checkpoint-67000/unet"
+    )
+    sg_text_encoder = CLIPTextModel.from_pretrained(
+        sg_distr_gen_config.pretrained_model_name_or_path,
+        subfolder="text_encoder",
+        revision=sg_distr_gen_config.revision,
+        use_safetensors=True,
+    )
+    sg_tokenizer = CLIPTokenizer.from_pretrained(
+        sg_distr_gen_config.pretrained_model_name_or_path,
+        subfolder="tokenizer",
+        revision=sg_distr_gen_config.revision,
+    )
+    sg_noise_scheduler = DDPMScheduler.from_pretrained(
+        sg_distr_gen_config.pretrained_model_name_or_path,
+        subfolder="scheduler",
+    )
+    sg_unet = UNet2DConditionModel.from_pretrained(
+        sg_distr_gen_config.unet_dir,
+        subfolder="unet",
+        use_safetensors=True,
+    )
+    sg_unet.set_attention_slice("max")
+
+    sg_distr_gen_pipeline = StartGoalDistrGenerationPipeline(
+        text_encoder=sg_text_encoder,
+        tokenizer=sg_tokenizer,
+        scheduler=sg_noise_scheduler,
+        unet=sg_unet,
+        config=sg_distr_gen_config,
+    )
+
+    dummy_scenario = Scenario.random(ScenarioConfig())
+    prompt = [
+        "A small group enters from the entrance, circles around the circle, exits through the exit"
+    ]
+
+    semantic_map = np.array([dummy_scenario.get_semantic_map()])
+    group_sizes = [10, 5]
+    group_n = len(group_sizes)
+
+    print("Inferring start and goal distributions...")
+    pred_group_sgdistrs = sg_distr_gen_pipeline.inference(
+        smaps=copy.deepcopy(np.array(semantic_map)),
+        prompts=copy.deepcopy(prompt),
+        num_inference_steps=sg_distr_gen_config.num_inference_steps,
+        guidance_scale=sg_distr_gen_config.guidance_scale,
+        save_path=None,
+        show=False,
+    )
+    print("Output shape: ", pred_group_sgdistrs.shape)

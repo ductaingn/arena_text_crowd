@@ -225,3 +225,63 @@ class VelocityFieldGenerationPipeline:
             np.save(os.path.join(save_path, "texts.npy"), {"texts": prompts_})
 
         return np.array(fields_all)
+
+
+if __name__ == "__main__":
+    from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import (
+        Scenario,
+        ScenarioConfig,
+    )
+
+    vel_field_gen_config = VelocityFieldGenerationPipelineConfig(
+        unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/Field-Full-V2/checkpoint-270000/unet"
+    )
+    vel_field_text_encoder = CLIPTextModel.from_pretrained(
+        vel_field_gen_config.pretrained_model_name_or_path,
+        subfolder="text_encoder",
+        revision=vel_field_gen_config.revision,
+        use_safetensors=True,
+    )
+    sg_tokenizer = CLIPTokenizer.from_pretrained(
+        vel_field_gen_config.pretrained_model_name_or_path,
+        subfolder="tokenizer",
+        revision=vel_field_gen_config.revision,
+    )
+    sg_noise_scheduler = DDPMScheduler.from_pretrained(
+        vel_field_gen_config.pretrained_model_name_or_path,
+        subfolder="scheduler",
+    )
+    sg_unet = UNet2DConditionModel.from_pretrained(
+        vel_field_gen_config.unet_dir,
+        subfolder="unet",
+        use_safetensors=True,
+    )
+    sg_unet.set_attention_slice("max")
+
+    vel_field_gen_pipeline = VelocityFieldGenerationPipeline(
+        text_encoder=vel_field_text_encoder,
+        tokenizer=sg_tokenizer,
+        scheduler=sg_noise_scheduler,
+        unet=sg_unet,
+        config=vel_field_gen_config,
+    )
+
+    dummy_scenario = Scenario.random(ScenarioConfig())
+    prompt = [
+        "A small group enters from the entrance, circles around the circle, exits through the exit"
+    ]
+
+    semantic_map = np.array([dummy_scenario.get_semantic_map()])
+
+    pred_group_sgdistrs = torch.randn(size=(1, 64, 64, 2))
+
+    pred_group_fields = vel_field_gen_pipeline.inference(
+        smaps=copy.deepcopy(np.array(semantic_map)),
+        prompts=copy.deepcopy(prompt),
+        sg_distrs=copy.deepcopy(pred_group_sgdistrs),
+        num_inference_steps=vel_field_gen_config.num_inference_steps,
+        guidance_scale=vel_field_gen_config.guidance_scale,
+        save_path=None,
+        show=False,
+    )
+    print("Output shape: ", pred_group_fields.shape)
