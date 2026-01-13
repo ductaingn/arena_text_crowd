@@ -8,7 +8,6 @@ import numpy as np
 import shapely.geometry as geom
 
 import rasterio
-from rasterio.features import geometry_mask
 
 from ..constants import AllSemanticObjects, EnvironmentParams
 from .semantic_object import (
@@ -47,7 +46,9 @@ class SemanticMap:
         objsm_id = all_obj_smtcs.index(obj_semantic_name)
 
         # Create one-hot feature
-        feature_ = np.zeros(len(all_obj_smtcs)-1) # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles 
+        feature_ = np.zeros(
+            len(all_obj_smtcs) - 1
+        )  # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles
         feature_[objsm_id] = 1
 
         return feature_
@@ -60,7 +61,9 @@ class SemanticMap:
             int(self.window_size[1] / EnvironmentParams.grid_width_map),
         ]
 
-        semantic_map_ = np.zeros((grid_size[0], grid_size[1], len(AllSemanticObjects)-1)) # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles 
+        semantic_map_ = np.zeros(
+            (grid_size[0], grid_size[1], len(AllSemanticObjects) - 1)
+        )  # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles
 
         transform_ = rasterio.transform.from_bounds(
             0,
