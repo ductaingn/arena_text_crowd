@@ -80,18 +80,22 @@ def arena_world_to_text_crowd_scenario(
     # its thickness is the rectangle's width
     for zone in arena_world_description.zones:
         for wall in zone.walls:
-            end = np.array([
-                wall.end.x*scenario_size[0]/arena_world_size[0],
-                wall.end.y*scenario_size[1]/arena_world_size[1],
-            ])
-            start = np.array([
-                wall.start.x*scenario_size[0]/arena_world_size[0],
-                wall.start.y*scenario_size[1]/arena_world_size[1],
-            ])
+            end = np.array(
+                [
+                    wall.end.x * scenario_size[0] / arena_world_size[0],
+                    wall.end.y * scenario_size[1] / arena_world_size[1],
+                ]
+            )
+            start = np.array(
+                [
+                    wall.start.x * scenario_size[0] / arena_world_size[0],
+                    wall.start.y * scenario_size[1] / arena_world_size[1],
+                ]
+            )
             d = end - start
             height = np.linalg.norm(d)
             width = wall_thickness
-            rotation = np.arctan(d[0] / d[1]) if d[1] != 0 else np.pi/2
+            rotation = np.arctan(d[0] / d[1]) if d[1] != 0 else np.pi / 2
             ctr = (end + start) / 2.0
             box = vectors_rotation(
                 np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
@@ -105,18 +109,22 @@ def arena_world_to_text_crowd_scenario(
             scenario.add_object(rec)
 
         for door in zone.doors:
-            end = np.array([
-                door.end.x*scenario_size[0]/arena_world_size[0],
-                door.end.y*scenario_size[1]/arena_world_size[1],
-            ])
-            start = np.array([
-                door.start.x*scenario_size[0]/arena_world_size[0],
-                door.start.y*scenario_size[1]/arena_world_size[1],
-            ])
+            end = np.array(
+                [
+                    door.end.x * scenario_size[0] / arena_world_size[0],
+                    door.end.y * scenario_size[1] / arena_world_size[1],
+                ]
+            )
+            start = np.array(
+                [
+                    door.start.x * scenario_size[0] / arena_world_size[0],
+                    door.start.y * scenario_size[1] / arena_world_size[1],
+                ]
+            )
             d = end - start
             height = np.linalg.norm(d)
-            width = wall_thickness*2
-            rotation = np.arctan(d[0] / d[1]) if d[1] != 0 else np.pi/2
+            width = wall_thickness
+            rotation = np.arctan(d[1] / d[0]) if d[0] != 0 else np.pi / 2
             ctr = (end + start) / 2.0
             box = vectors_rotation(
                 np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
@@ -125,11 +133,11 @@ def arena_world_to_text_crowd_scenario(
             box = (np.array(box) + ctr).tolist()
             obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
             passage = Passage(
-                width=width,
-                height=height,
+                width=height,
+                height=width,
                 center=ctr,
-                passage_width=height * 0.8,
-                rotation=rotation,
+                passage_width=height,  # Take whole length of the door as passage width
+                rotation=rotation / np.pi * 180.0,
                 polygon=obj_poly,
             )
             passage.set_infor()
@@ -149,7 +157,6 @@ def arena_world_to_text_crowd_scenario(
 if __name__ == "__main__":
     from pathlib import Path
     from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
-    from arena_text_crowd.crowd_generation_pipeline.utils.visualization import Viewer
 
     world_path = Path(
         "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
