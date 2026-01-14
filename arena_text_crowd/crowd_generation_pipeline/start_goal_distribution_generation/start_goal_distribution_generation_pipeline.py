@@ -1,6 +1,5 @@
 import os
 import copy
-from typing import List
 from tqdm.auto import tqdm
 
 import attrs
@@ -152,6 +151,7 @@ if __name__ == "__main__":
         Scenario,
         ScenarioConfig,
     )
+    from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import PromptCanonicalizer
 
     sg_distr_gen_config = StartGoalDistrGenerationPipelineConfig(
         unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/SgDistr-Full-V1/checkpoint-67000/unet"
@@ -187,9 +187,9 @@ if __name__ == "__main__":
     )
 
     dummy_scenario = Scenario.random(ScenarioConfig())
-    prompt = [
-        "A small group enters from the entrance, circles around the circle, exits through the exit"
-    ]
+    prompt = "A small group enters from the entrance, circles around the circle, exits through the exit"
+
+    prompt_canonicalizer = PromptCanonicalizer()
 
     semantic_map = np.array([dummy_scenario.get_semantic_map()])
     group_sizes = [10, 5]
@@ -198,10 +198,12 @@ if __name__ == "__main__":
     print("Inferring start and goal distributions...")
     pred_group_sgdistrs = sg_distr_gen_pipeline.inference(
         smaps=copy.deepcopy(np.array(semantic_map)),
-        prompts=copy.deepcopy(prompt),
+        prompts=prompt_canonicalizer.canonicalize(prompt),
         num_inference_steps=sg_distr_gen_config.num_inference_steps,
         guidance_scale=sg_distr_gen_config.guidance_scale,
         save_path=None,
         show=False,
     )
     print("Output shape: ", pred_group_sgdistrs.shape)
+    print("Output max: ", pred_group_sgdistrs.max())
+    print("Output min: ", pred_group_sgdistrs.min())

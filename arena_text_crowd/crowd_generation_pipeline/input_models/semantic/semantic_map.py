@@ -7,7 +7,7 @@ import numpy as np
 
 import shapely.geometry as geom
 
-import rasterio
+from rasterio import features, transform  # Because rasterio is stupid
 
 from ..constants import AllSemanticObjects, EnvironmentParams
 from .semantic_object import (
@@ -65,7 +65,7 @@ class SemanticMap:
             (grid_size[0], grid_size[1], len(AllSemanticObjects) - 1)
         )  # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles
 
-        transform_ = rasterio.transform.from_bounds(
+        transform_ = transform.from_bounds(
             0,
             0,
             self.window_size[0],
@@ -76,7 +76,7 @@ class SemanticMap:
 
         for passage in self.passages_list:
             poly_free = geom.Polygon(copy.deepcopy(passage.free_space))
-            mask_free = rasterio.features.geometry_mask(
+            mask_free = features.geometry_mask(
                 [poly_free],
                 out_shape=(grid_size[1], grid_size[0]),
                 transform=transform_,
@@ -88,7 +88,7 @@ class SemanticMap:
             )
             for obs_id in range(2):
                 poly_obs = geom.Polygon(copy.deepcopy(passage.obstacles[obs_id]))
-                mask_obs = rasterio.features.geometry_mask(
+                mask_obs = features.geometry_mask(
                     [poly_obs],
                     out_shape=(grid_size[1], grid_size[0]),
                     transform=transform_,
@@ -105,7 +105,7 @@ class SemanticMap:
         ):
             poly_ = geom.Polygon(copy.deepcopy(obstacle.vertexes))
 
-            geom_mask = rasterio.features.geometry_mask(
+            geom_mask = features.geometry_mask(
                 [poly_],
                 out_shape=(grid_size[1], grid_size[0]),
                 transform=transform_,
@@ -123,7 +123,7 @@ class SemanticMap:
         for circle in self.obstacle_dict[AllSemanticObjects.CIRCLE]:
             poly_ = geom.Polygon(copy.deepcopy(circle.edges))
 
-            geom_mask = rasterio.features.geometry_mask(
+            geom_mask = features.geometry_mask(
                 [poly_],
                 out_shape=(grid_size[1], grid_size[0]),
                 transform=transform_,
@@ -139,7 +139,7 @@ class SemanticMap:
             + self.areas_dict[AllSemanticObjects.EXIT]
         ):
             poly_ = geom.Polygon(copy.deepcopy(area.whole_box))
-            geom_mask = rasterio.features.geometry_mask(
+            geom_mask = features.geometry_mask(
                 [poly_],
                 out_shape=(grid_size[1], grid_size[0]),
                 transform=transform_,
