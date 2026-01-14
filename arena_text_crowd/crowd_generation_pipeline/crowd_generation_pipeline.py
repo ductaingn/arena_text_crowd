@@ -1,10 +1,15 @@
 import copy
+import time
 from typing import List
 import random
 
 import attrs
 
 import numpy as np
+
+import cv2
+
+from fastgrab import screenshot
 
 from transformers import CLIPTextModel, CLIPTokenizer
 
@@ -21,20 +26,12 @@ from arena_text_crowd.crowd_generation_pipeline.velocity_field_generation.veloci
 from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
 from arena_text_crowd.crowd_generation_pipeline.utils.utils import (
     collision_checker,
-    get_box_ll,
 )
 from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import (
     Scenario,
-    ScenarioConfig,
 )
 from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import (
     PromptCanonicalizer,
-)
-from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
-    Rectangle,
-)
-from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
-    AllSemanticObjects,
 )
 from arena_text_crowd.crowd_generation_pipeline.simulator.agent import Agent
 from arena_text_crowd.crowd_generation_pipeline.simulator.field_env import (
@@ -59,6 +56,7 @@ class CrowdGenerationPipelineConfig:
     max_path_len_ratio: float = 1.5
     pos_rand_range: int = 5
     reach_dis: int = 60
+    record_video_path: str | None = None
 
     # metrics
     path_bound: int = 80
@@ -307,53 +305,7 @@ class CrowdGenerationPipeline:
 
         # Set all agents' params and reset the scenario
         # Add boundary to scenario_bound
-        scenario_bound = copy.deepcopy(scenario)
-        window_size = copy.deepcopy(scenario_bound.scenario_config.window_size)
-        thick = 50
-        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
-            Rectangle(
-                width=window_size[0] + thick * 2,
-                height=thick,
-                vertexes=get_box_ll(
-                    x=window_size[0] + thick * 2,
-                    y=thick,
-                    lowerleft=(-thick, -thick),
-                ),
-            )
-        )
-        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
-            Rectangle(
-                width=window_size[0] + thick * 2,
-                height=thick,
-                vertexes=get_box_ll(
-                    x=window_size[0] + thick * 2,
-                    y=thick,
-                    lowerleft=(-thick, window_size[1]),
-                ),
-            )
-        )
-        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
-            Rectangle(
-                width=thick,
-                height=window_size[1] + thick * 2,
-                vertexes=get_box_ll(
-                    x=thick,
-                    y=window_size[1] + thick * 2,
-                    lowerleft=(-thick, -thick),
-                ),
-            )
-        )
-        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
-            Rectangle(
-                width=thick,
-                height=window_size[1] + thick * 2,
-                vertexes=get_box_ll(
-                    x=thick,
-                    y=window_size[1] + thick * 2,
-                    lowerleft=(window_size[0], -thick),
-                ),
-            )
-        )
+        scenario_bound = Scenario.get_scenario_bound(scenario)
         all_obs = scenario_bound.get_all_obstacles()
 
         agent_list: List[Agent] = []
@@ -402,10 +354,31 @@ class CrowdGenerationPipeline:
         #     ].traj_history[: -self.generation_pipeline_config.warm_up_steps]
         #     assert len(fld_env.agent_dict[agt_id].traj_history) == 0
 
+        video_frms: List[np.ndarray] = []
         step = 0
         all_agent_trajs = [[] * group_n]
         removed_agent_n = 0
         while True:
+            if self.generation_pipeline_config.visual:
+                fld_env.render()
+                time.sleep(6e-3)
+                if (
+                    self.generation_pipeline_config.record_video_path is not None
+                    and fld_env.viewer.closed
+                ):
+                    loc = fld_env.viewer.get_location()
+                    im_cv2 = np.array(
+                        screenshot.Screenshot().capture(
+                            (
+                                loc[0],
+                                loc[1],
+                                fld_env.viewer.width,
+                                fld_env.viewer.height,
+                            )
+                        )
+                    )[:, :, 0:3]
+                    video_frms.append(im_cv2)
+
             # remove agents that reach the goal or get out of the scenario, and record its trajectory
             for gid in range(group_n):
                 for aid in gfields_for_ctrl[gid].agent_ids:
@@ -443,6 +416,9 @@ class CrowdGenerationPipeline:
             if removed_agent_n >= agent_n or step > 1000:  # TODO: Manage lifetime
                 break
 
+            if self.generation_pipeline_config.visual and not fld_env.viewer.closed:
+                fld_env.viewer.close()
+
         # handle the rest agents
         for gid in range(group_n):
             for aid in gfields_for_ctrl[gid].agent_ids:
@@ -456,26 +432,53 @@ class CrowdGenerationPipeline:
                     }
                 )
 
+        # save record video
+        if (
+            self.generation_pipeline_config.visual
+            and self.generation_pipeline_config.record_video_path is not None
+        ):
+            video_wt = cv2.VideoWriter(
+                self.generation_pipeline_config.record_video_path,
+                cv2.VideoWriter_fourcc("P", "I", "M", "1"),
+                280 / self.generation_pipeline_config.agent_prefV,
+                (fld_env.viewer.width, fld_env.viewer.height),
+            )
+            for frm in video_frms:
+                video_wt.write(frm)
+            video_wt.release()
+
         return all_agent_trajs
 
 
 if __name__ == "__main__":
-    from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
-        Triangle,
-        Circle,
+    import os
+    from pathlib import Path
+    from arena_simulation_setup.tree.World import World
+    from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
+
+    # Create Text-Crowd scenario from Arena World
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    )
+    arena_world = World(path=world_path)
+    scenario = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
     )
 
-    dummy_scenario = Scenario.random(ScenarioConfig())
-    while (
-        len(dummy_scenario.areas_dict[AllSemanticObjects.ENTRANCE]) == 0
-        or len(dummy_scenario.areas_dict[AllSemanticObjects.EXIT]) == 0
-    ):
-        dummy_scenario = Scenario.random(ScenarioConfig())
-        print("Generating scenario")
+    # Generate agents trajectories
+    models_path = Path(
+        "/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest"
+    )
     crowd_generation_pipeline = CrowdGenerationPipeline(
-        CrowdGenerationPipelineConfig(), SGDGPConfig(), VFGPConfig()
+        CrowdGenerationPipelineConfig(),
+        SGDGPConfig(
+            unet_dir=os.path.join(models_path, "SgDistr-Full-V1/checkpoint-67000/unet")
+        ),
+        VFGPConfig(
+            unet_dir=os.path.join(models_path, "Field-Full-V2/checkpoint-270000/unet")
+        ),
     )
     agents_trajectories = crowd_generation_pipeline.generate(
-        scenario=dummy_scenario, prompt="A group of people walking around"
+        scenario=scenario, prompt="A group of people walking around"
     )
-    print(agents_trajectories)
+    print(agents_trajectories.shape)

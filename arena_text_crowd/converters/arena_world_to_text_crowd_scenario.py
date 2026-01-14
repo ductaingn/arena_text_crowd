@@ -25,13 +25,11 @@ from arena_text_crowd.crowd_generation_pipeline.utils.utils import (
 
 def arena_world_to_text_crowd_scenario(
     arena_world: World | WorldDescription,
-    entrances: List[Entrance],
-    exits: List[Exit],
     scenario_size: Tuple[int, int] = (800, 800),
     wall_thickness: float = 0.5,
 ) -> Scenario:
     """
-    Convert an Arena World into a Text-Crowd Scenario, keeps corners and walls only.
+    Convert an Arena World into a Text-Crowd Scenario, keep corners and walls only, Arena Zones is considered as entrances and exits.
 
     Args:
         arena_world : World | WorldDescription
@@ -66,19 +64,32 @@ def arena_world_to_text_crowd_scenario(
 
     scenario = Scenario(ScenarioConfig(window_size=scenario_size))
 
-    for entrance in entrances:
+    # Assuming the length of the wall is the corresponding rectangle height,
+    # its thickness is the rectangle's width
+    for zone in arena_world_description.zones:
+        width, height = zone.floor.x_length, zone.floor.y_length
+        ctr = [zone.floor.pos.x, zone.floor.pos.y]
+        box = vectors_rotation(
+            np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
+            0,
+        )
+        box = (np.array(box) + np.array(ctr)).tolist()
+        obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
+
+        entrance = Entrance(
+            width=width, height=height, center=ctr, rotation=0, polygon=obj_poly
+        )
         entrance.set_infor()
         entrance.set_obj_graph()
         scenario.add_object(entrance)
 
-    for exit in exits:
+        exit = Exit(
+            width=width, height=height, center=ctr, rotation=0, polygon=obj_poly
+        )
         exit.set_infor()
         exit.set_obj_graph()
         scenario.add_object(exit)
 
-    # Assuming the length of the wall is the corresponding rectangle height,
-    # its thickness is the rectangle's width
-    for zone in arena_world_description.zones:
         for wall in zone.walls:
             end = np.array(
                 [
@@ -163,7 +174,7 @@ if __name__ == "__main__":
     )
     arena_world = World(path=world_path)
     text_crowd_scenario = arena_world_to_text_crowd_scenario(
-        arena_world=arena_world, entrances=[], exits=[], wall_thickness=1.0
+        arena_world=arena_world, wall_thickness=1.0
     )
 
     fld = Field(text_crowd_scenario, grid_width=20.0)

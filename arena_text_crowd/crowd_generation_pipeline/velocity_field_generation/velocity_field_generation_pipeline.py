@@ -228,11 +228,34 @@ class VelocityFieldGenerationPipeline:
 
 
 if __name__ == "__main__":
-    from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import (
-        Scenario,
-        ScenarioConfig,
+    from pathlib import Path
+    from arena_simulation_setup.tree.World import World
+
+    from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
+        Entrance,
+        Exit,
+    )
+    from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
+    from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import PromptCanonicalizer
+    from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
+
+    # Create Text-Crowd scenario from Arena World
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    )
+    arena_world = World(path=world_path)
+    scenario = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world, 
+        scenario_size=(1024, 1024),
+        wall_thickness=1.0
     )
 
+    entraces: List[Entrance] = []
+    exit: List[Exit] = []
+
+    semantic_map = np.array([scenario.get_semantic_map()])
+
+    # Initialize velocity generation model
     vel_field_gen_config = VelocityFieldGenerationPipelineConfig(
         unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/Field-Full-V2/checkpoint-270000/unet"
     )
@@ -266,18 +289,14 @@ if __name__ == "__main__":
         config=vel_field_gen_config,
     )
 
-    dummy_scenario = Scenario.random(ScenarioConfig())
-    prompt = [
-        "A small group enters from the entrance, circles around the circle, exits through the exit"
-    ]
-
-    semantic_map = np.array([dummy_scenario.get_semantic_map()])
+    prompt = "A small group enters from the entrance, circles around the circle, exits through the exit"
+    prompt_canonicalizer = PromptCanonicalizer()
 
     pred_group_sgdistrs = torch.randn(size=(1, 64, 64, 2))
 
     pred_group_fields = vel_field_gen_pipeline.inference(
         smaps=copy.deepcopy(np.array(semantic_map)),
-        prompts=copy.deepcopy(prompt),
+        prompts=prompt_canonicalizer.canonicalize(prompt),
         sg_distrs=copy.deepcopy(pred_group_sgdistrs),
         num_inference_steps=vel_field_gen_config.num_inference_steps,
         guidance_scale=vel_field_gen_config.guidance_scale,

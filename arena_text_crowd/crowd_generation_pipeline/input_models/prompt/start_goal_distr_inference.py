@@ -7,7 +7,6 @@ import os
 from google import genai
 
 LLM_INSTRUCTION = """
-Instruction:
 You will be given a sentence that describes the behavior of one or more groups of humans and their interactions with the
 real environment. The task is translating the given sentence into several canonicalized sentences. Specifically:
 1. The given sentence should be divided into multiple canonicalized sentences, where each sentence only describes the
@@ -90,7 +89,11 @@ A large group moves from the upper left entrance, crosses the middle passage, ex
 """
 
 
-class PromptCanonicalizer:
+class StartGoalDistrLLMGeneration:
+    """
+    Use Large Language Model to predict the start and goal distribution
+    """
+
     def __init__(self, model="gemini-2.5-flash", top_p=0.8, thinking_budget=8192):
         self.model = model
         self.top_p = top_p
@@ -118,24 +121,4 @@ class PromptCanonicalizer:
             ),
         )
 
-    def canonicalize(self, user_prompt: str) -> List[str]:
-        return 'A small group enters from the entrance, circles around the circle, exits through the exit.'
-        print("Canonicalizing prompt ...")
-        start = time.time()
-        messages = [user_prompt]
-        response = self.inference_client.models.generate_content(
-            model=self.model, contents=messages, config=self.generate_content_config
-        )
-
-        answer = response.text
-        end = time.time()
-        print(f"Canonicalizing done, took: {end-start:.1f}s")
-
-        return answer
-
-    def get_group_size(self, canonicalized_des: str) -> List[int]:
-        # TODO: process this
-        group_n = len(canonicalized_des)
-        group_size = [random.randint(1, 10)]*group_n
-
-        return group_size
+    def get_start_goal_zones(self, user_prompt: str): ...

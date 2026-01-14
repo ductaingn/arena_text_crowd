@@ -186,6 +186,58 @@ class Scenario:
 
         return scenario_
 
+    @classmethod
+    def get_scenario_bound(cls, scenario: "Scenario") -> "Scenario":
+        scenario_bound = copy.deepcopy(scenario)
+        window_size = copy.deepcopy(scenario_bound.scenario_config.window_size)
+        thick = 50
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=window_size[0] + thick * 2,
+                height=thick,
+                vertexes=get_box_ll(
+                    x=window_size[0] + thick * 2,
+                    y=thick,
+                    lowerleft=(-thick, -thick),
+                ),
+            )
+        )
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=window_size[0] + thick * 2,
+                height=thick,
+                vertexes=get_box_ll(
+                    x=window_size[0] + thick * 2,
+                    y=thick,
+                    lowerleft=(-thick, window_size[1]),
+                ),
+            )
+        )
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=thick,
+                height=window_size[1] + thick * 2,
+                vertexes=get_box_ll(
+                    x=thick,
+                    y=window_size[1] + thick * 2,
+                    lowerleft=(-thick, -thick),
+                ),
+            )
+        )
+        scenario_bound.obstacle_dict[AllSemanticObjects.RECTANGLE].append(
+            Rectangle(
+                width=thick,
+                height=window_size[1] + thick * 2,
+                vertexes=get_box_ll(
+                    x=thick,
+                    y=window_size[1] + thick * 2,
+                    lowerleft=(window_size[0], -thick),
+                ),
+            )
+        )
+
+        return scenario_bound
+
     def get_rand_obj(
         self,
         obj_type: AllSemanticObjects,
