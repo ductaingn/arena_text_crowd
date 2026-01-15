@@ -6,11 +6,15 @@ import attrs
 
 import numpy as np
 
+import cv2
+
 import torch
 
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from diffusers import DDPMScheduler, UNet2DConditionModel
+
+from arena_text_crowd.crowd_generation_pipeline.utils.utils import cv_visual_map
 
 
 @attrs.define
@@ -143,15 +147,57 @@ class StartGoalDistrGenerationPipeline:
             )
             sgdistrs_all.append(copy.deepcopy(sg_distr_i))
 
+            if show:
+                smap_i = np.array(
+                    torch.permute(smaps_[dt_id].clone().detach().cpu(), (1, 2, 0))
+                )
+                sg_colors = np.array([[0, 255, 0], [0, 0, 255]])
+                map_colors = np.concatenate(
+                    [np.random.randint(0, 255, (len(smap_i[0, 0]) - 2, 3)), sg_colors]
+                )
+                smap_cvimg = cv_visual_map(
+                    smap_i, colors=map_colors, save_nm=None, show=False
+                )
+                distr_cvimg = cv_visual_map(
+                    sg_distr_i, colors=sg_colors, save_nm=None, show=False
+                )
+                interval = np.ones((len(smap_cvimg), 5, 3)) * 255
+                cat_img = cv2.hconcat(
+                    [interval, smap_cvimg, interval, distr_cvimg, interval]
+                )
+                cat_img_resize = cv2.resize(
+                    cat_img, None, fx=5, fy=5, interpolation=cv2.INTER_CUBIC
+                )
+                cv2.imshow("img", cat_img_resize / 255)
+                cv2.waitKey(0)
+
         return np.array(sgdistrs_all)
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+    from arena_simulation_setup.tree.World import World
+
     from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import (
         Scenario,
         ScenarioConfig,
     )
-    from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import PromptCanonicalizer
+    from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import (
+        PromptCanonicalizer,
+    )
+    from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
+
+    # Create Text-Crowd scenario from Arena World
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    )
+    arena_world = World(path=world_path)
+    scenario = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
+    )
+    # scenario = Scenario.random(ScenarioConfig())
+
+    semantic_map = np.array([scenario.get_semantic_map()])
 
     sg_distr_gen_config = StartGoalDistrGenerationPipelineConfig(
         unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/SgDistr-Full-V1/checkpoint-67000/unet"
@@ -186,14 +232,8 @@ if __name__ == "__main__":
         config=sg_distr_gen_config,
     )
 
-    dummy_scenario = Scenario.random(ScenarioConfig())
     prompt = "A small group enters from the entrance, circles around the circle, exits through the exit"
-
     prompt_canonicalizer = PromptCanonicalizer()
-
-    semantic_map = np.array([dummy_scenario.get_semantic_map()])
-    group_sizes = [10, 5]
-    group_n = len(group_sizes)
 
     print("Inferring start and goal distributions...")
     pred_group_sgdistrs = sg_distr_gen_pipeline.inference(
@@ -202,7 +242,7 @@ if __name__ == "__main__":
         num_inference_steps=sg_distr_gen_config.num_inference_steps,
         guidance_scale=sg_distr_gen_config.guidance_scale,
         save_path=None,
-        show=False,
+        show=True,
     )
     print("Output shape: ", pred_group_sgdistrs.shape)
     print("Output max: ", pred_group_sgdistrs.max())

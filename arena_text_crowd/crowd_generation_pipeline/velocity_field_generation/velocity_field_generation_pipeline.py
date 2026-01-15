@@ -231,12 +231,9 @@ if __name__ == "__main__":
     from pathlib import Path
     from arena_simulation_setup.tree.World import World
 
-    from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
-        Entrance,
-        Exit,
+    from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import (
+        PromptCanonicalizer,
     )
-    from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
-    from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import PromptCanonicalizer
     from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
 
     # Create Text-Crowd scenario from Arena World
@@ -245,13 +242,8 @@ if __name__ == "__main__":
     )
     arena_world = World(path=world_path)
     scenario = arena_world_to_text_crowd_scenario(
-        arena_world=arena_world, 
-        scenario_size=(1024, 1024),
-        wall_thickness=1.0
+        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
     )
-
-    entraces: List[Entrance] = []
-    exit: List[Exit] = []
 
     semantic_map = np.array([scenario.get_semantic_map()])
 
@@ -301,6 +293,6 @@ if __name__ == "__main__":
         num_inference_steps=vel_field_gen_config.num_inference_steps,
         guidance_scale=vel_field_gen_config.guidance_scale,
         save_path=None,
-        show=False,
+        show=True,
     )
     print("Output shape: ", pred_group_fields.shape)
