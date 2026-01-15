@@ -8,7 +8,9 @@ import numpy as np
 import rvo2
 
 from ..utils.utils import make_ccw
+from ..utils.visualization import Viewer
 from ..input_models.scenario import Scenario
+from ..input_models.constants import AllSemanticObjects
 from .agent import Agent
 
 
@@ -17,29 +19,33 @@ class ORCAEnv:
         self,
         scenario: Scenario,
         agent_list: List[Agent],
+        visual: bool = False,
         draw_scale: float = 1.0,
     ):
         self.agent_num = len(agent_list)
         self.draw_scale = draw_scale
+        self.visual = visual
 
+        self.viewer: Viewer | None = None
         self.sensor = None
         self.current_scenario = None
         self.agent_dict: Dict[int, Agent] = {}  # {agent id in RVO2 simulator: Agent}
-        self.agent_id_list = []  # Hash map of agents' ids in RVO2 simulator
         self.time_step = 0
 
         self.sim = self.sim_prepare()
         for agent in agent_list:
-            agent_idx = self.add_agent_sim(*agent.pos) # TODO: Vefiry
-            self.agent_id_list.append(agent_idx)
-            agent.id = agent_idx
-            self.agent_dict.update({agent_idx: agent})
+            agent_id = self.add_agent_sim(*agent.pos)  # TODO: Vefiry
+            agent.id = agent_id
+            self.agent_dict.update({agent_id: agent})
 
         self.reset(
             scenario=copy.deepcopy(scenario),
         )
 
     def reset(self, scenario: Scenario):
+        if self.viewer is not None:
+            self.viewer.close()
+            self.viewer = None
         self.sensor = None
         self.time_step = 0
 
@@ -50,8 +56,23 @@ class ORCAEnv:
         self.current_scenario = copy.deepcopy(scenario)
         self.reset_sim_scenario(self.current_scenario)
 
-        for idx in self.agent_id_list:
-            self.set_agent_params(idx)
+        for id in self.agent_dict.keys():
+            self.set_agent_params(id)
+
+        # reset env in viewer
+        if self.visual:
+            self.viewer = Viewer(
+                wind_size=(
+                    int(scenario.scenario_config.window_size[0] * self.draw_scale),
+                    int(scenario.scenario_config.window_size[1] * self.draw_scale),
+                ),
+                checker=(
+                    int(scenario.scenario_config.window_size[0] * self.draw_scale),
+                    int(scenario.scenario_config.window_size[1] * self.draw_scale),
+                    [235, 235, 235],
+                ),
+            )
+            self.reset_viewer(self.current_scenario, self.agent_current_infor)
 
     ######------ functions related to simulator------######
     def sim_prepare(self):
@@ -81,9 +102,9 @@ class ORCAEnv:
         pre_ps = self.get_current_positions()
         actions = np.array(actions).reshape(-1, 2)
         # perform action
-        for agent_idx, agent_id in enumerate(self.agent_id_list):
-            dx = actions[agent_idx][0]
-            dy = actions[agent_idx][1]
+        for agent_id in self.agent_dict.keys():
+            dx = actions[agent_id][0]
+            dy = actions[agent_id][1]
             len_a = math.sqrt(dx * dx + dy * dy)
             if len_a > self.agent_dict[agent_id].maxSpd:
                 dx *= self.agent_dict[agent_id].maxSpd / len_a
@@ -93,22 +114,21 @@ class ORCAEnv:
 
         # update infor
         self.time_step += 1
-        for agent_idx, agent_id in enumerate(self.agent_id_list):
+        for agent_id in self.agent_dict.keys():
             curr_p_i = self.sim.getAgentPosition(agent_id)
             self.agent_dict[agent_id].pos = np.array(curr_p_i).tolist()
             self.agent_dict[agent_id].add_history(
-                pre_ps[agent_idx].tolist(), actions[agent_idx].tolist()
+                pre_ps[agent_id].tolist(), actions[agent_id].tolist()
             )
 
     ######------ functions related to agent setting ------######
     def add_agent_sim(self, px, py):
         return self.sim.addAgent(pos=tuple([px, py]))
 
-    def set_agent_params(self, a_idx: int):
+    def set_agent_params(self, agent_id: int):
         """
         Set agent parameters in simulator
         """
-        agent_id = self.agent_id_list[a_idx]
         agent = self.agent_dict[agent_id]
         self.sim.setAgentPosition(agent_id, tuple(agent.pos))
         self.sim.setAgentNeighborDist(agent_id, agent.nb_Dist)
@@ -120,17 +140,16 @@ class ORCAEnv:
         if agent.vlcty is not None:
             self.sim.setAgentVelocity(agent_id, agent.vlcty)
 
-    def set_agent_position(self, a_idx, pos):
-        agent_id = self.agent_id_list[a_idx]
+    def set_agent_position(self, agent_id, pos):
         # set agent position in simulator
         self.sim.setAgentPosition(agent_id, tuple(pos))
         # update current agent infor
-        self.agent_dict[a_idx].pos = copy.deepcopy(pos)
+        self.agent_dict[agent_id].pos = copy.deepcopy(pos)
 
     ######------ functions related to agent information ------######
     def get_current_positions(self):
         current_positions = []
-        for agent_id in self.agent_id_list:
+        for agent_id in self.agent_dict.keys():
             pos = self.sim.getAgentPosition(agent_id)
             current_positions.append([pos[0], pos[1]])
         current_positions = np.array(current_positions)
@@ -138,9 +157,104 @@ class ORCAEnv:
         return current_positions
 
     def update_current_positions(self):
-        for agent_id in self.agent_id_list:
+        for agent_id in self.agent_dict.keys():
             pos = self.sim.getAgentPosition(agent_id)
             self.agent_dict[agent_id].pos = [pos[0], pos[1]]
+
+    ######------ functions related to viewer ------######
+    def reset_viewer(self, scenario: Scenario):
+        scenario = copy.deepcopy(scenario)
+        if not scenario.extended:
+            scenario.extend()
+
+        self.viewer.reset_array()
+
+        # set scenarios
+        for obstacle in (
+            scenario.obstacle_dict[AllSemanticObjects.RECTANGLE]
+            + scenario.obstacle_dict[AllSemanticObjects.TRIANGLE]
+        ):
+            self.viewer.add_obs(
+                (copy.deepcopy(np.array(obstacle.vertexes)) * self.draw_scale)
+                .reshape(1, -1)[0]
+                .tolist()
+            )
+        for obstacle in scenario.obstacle_dict[AllSemanticObjects.CIRCLE]:
+            self.viewer.add_obs(
+                (copy.deepcopy(np.array(obstacle.edges)) * self.draw_scale)
+                .reshape(1, -1)[0]
+                .tolist()
+            )
+
+        for zebra_crossing in scenario.zebra_crossing_list:
+            for box_i in zebra_crossing.zebra_lines_boxes:
+                self.viewer.add_zebra_box(
+                    (copy.deepcopy(np.array(box_i)) * self.draw_scale)
+                    .reshape(1, -1)[0]
+                    .tolist()
+                )
+
+        for passage in scenario.passages_list:
+            for psg_obs in passage.obstacles:
+                self.viewer.add_obs(
+                    (copy.deepcopy(np.array(psg_obs)) * self.draw_scale)
+                    .reshape(1, -1)[0]
+                    .tolist()
+                )
+
+        for entrance in scenario.areas_dict[AllSemanticObjects.ENTRANCE]:
+            area_color = [140, 235, 205]
+            self.viewer.add_door_box(
+                (copy.deepcopy(np.array(entrance.whole_box)) * self.draw_scale)
+                .reshape(1, -1)[0]
+                .tolist(),
+                area_color,
+            )
+        for exit in scenario.areas_dict[AllSemanticObjects.EXIT]:
+            area_color = [250, 155, 155]
+            self.viewer.add_door_box(
+                (copy.deepcopy(np.array(exit.whole_box)) * self.draw_scale)
+                .reshape(1, -1)[0]
+                .tolist(),
+                area_color,
+            )
+
+        # set agents
+        for agent_id in sorted(
+            self.agent_dict.items()
+        ):  # Ensure the self.viewer.agent_pos_array's order aligns with the agent ID
+            agent = self.agent_dict[agent_id]
+            self.viewer.add_agent(
+                pos=tuple(np.array(agent.pos) * self.draw_scale),
+                rad=agent.radius * self.draw_scale,
+                color=agent.color,
+            )
+            if agent.draw_goal:
+                self.viewer.add_goal(
+                    pos=tuple(np.array(agent.goal_pos * self.draw_scale)),
+                    goal_size=agent.radius / 2 * self.draw_scale,
+                    color=agent.color,
+                )
+            else:
+                self.viewer.add_goal(pos=None)
+
+        # set sensor
+        if self.sensor is not None:
+            self.viewer.sensor = self.sensor
+
+    def render(self):
+        for agent_id in sorted(self.agent_dict.keys()):
+            agent = self.agent_dict[agent_id]
+            self.viewer.agent_pos_array[agent_id] = (
+                np.array(agent.pos) * self.draw_scale
+            ).tolist()
+            if agent.draw_goal:
+                self.viewer.goal_pos_array[agent_id] = (
+                    np.array(agent.goal_pos) * self.draw_scale
+                ).tolist()
+            else:
+                self.viewer.goal_pos_array[agent_id] = None
+        self.viewer.render()
 
 
 if __name__ == "__main__":

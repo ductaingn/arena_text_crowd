@@ -30,16 +30,28 @@ class FieldEnv(ORCAEnv):
         self,
         scenario: Scenario,
         agent_list: List[Agent],
+        visual: bool = False,
+        draw_scale: float = 1.0,
     ):
-        super(FieldEnv, self).__init__(scenario=scenario, agent_list=agent_list)
+        super(FieldEnv, self).__init__(
+            scenario=scenario,
+            agent_list=agent_list,
+            visual=visual,
+            draw_scale=draw_scale,
+        )
         self.agent_prefvs = []
-        for agent_idx in range(self.agent_num):
+        for agent_id in sorted(self.agent_dict.keys()):
             self.agent_prefvs.append(
-                self.agent_dict[agent_idx].pref_speed
+                self.agent_dict[agent_id].pref_speed
             )  # TODO: Verify
 
     def reset(self, scenario: Scenario):
         super(FieldEnv, self).reset(scenario)
+        self.agent_prefvs = []
+        for agent_id in sorted(self.agent_dict.keys()):
+            self.agent_prefvs.append(
+                self.agent_dict[agent_id].pref_speed
+            )  # TODO: Verify
 
     def perform_action_ORCAEnv(self, actions):
         super(FieldEnv, self).perform_action(actions)
@@ -165,12 +177,12 @@ class FieldEnv(ORCAEnv):
                     agent_actions[agent_id] = (
                         np.array(agt_action) / np.linalg.norm(np.array(agt_action))
                     ) * agent_prefV
-        print(f"time in computing actions: {time.time()-start_time}")
+        print(f"time in computing actions: {time.time() - start_time}")
 
         # perform actions
         start_time = time.time()
         self.perform_action_ORCAEnv(agent_actions.tolist())
-        print(f"time in performing actions: {time.time()-start_time}")
+        print(f"time in performing actions: {time.time() - start_time}")
 
     def perform_action_fast(self, group_fields: List[GroupField]):
         agent_actions = np.zeros((self.agent_num, 2))
