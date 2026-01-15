@@ -17,10 +17,17 @@ from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_o
     Passage,
     Rectangle,
 )
+from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
+    AllSemanticObjects,
+)
 from arena_text_crowd.crowd_generation_pipeline.utils.utils import (
     vectors_rotation,
     get_box,
 )
+
+
+def clamp(x, min_val, max_val):
+    return max(min_val, min(x, max_val))
 
 
 def arena_world_to_text_crowd_scenario(
@@ -64,11 +71,29 @@ def arena_world_to_text_crowd_scenario(
 
     scenario = Scenario(ScenarioConfig(window_size=scenario_size))
 
-    # Assuming the length of the wall is the corresponding rectangle height,
-    # its thickness is the rectangle's width
     for zone in arena_world_description.zones:
-        width, height = zone.floor.x_length, zone.floor.y_length
-        ctr = [zone.floor.pos.x, zone.floor.pos.y]
+        # Turn every Arena Zone into a Text-Crowd Entrance/Exit
+        scenario_entrance_range = scenario.scenario_config.objects[
+            AllSemanticObjects.ENTRANCE
+        ].size_range
+        width, height = (
+            clamp(
+                zone.floor.x_length * scenario_size[0] / arena_world_size[0]
+                - wall_thickness,
+                scenario_entrance_range[0],
+                scenario_entrance_range[1],
+            ),
+            clamp(
+                zone.floor.y_length * scenario_size[1] / arena_world_size[1]
+                - wall_thickness,
+                scenario_entrance_range[0],
+                scenario_entrance_range[1],
+            ),
+        )
+        ctr = [
+            zone.floor.pos.x * scenario_size[0] / arena_world_size[0],
+            zone.floor.pos.y * scenario_size[1] / arena_world_size[1],
+        ]
         box = vectors_rotation(
             np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
             0,
@@ -90,6 +115,9 @@ def arena_world_to_text_crowd_scenario(
         exit.set_obj_graph()
         scenario.add_object(exit)
 
+        # Convert Arena Wall into Text-Crowd Rectangle
+        # Assuming the length of the wall is the corresponding rectangle height,
+        # its thickness is the rectangle's width
         for wall in zone.walls:
             end = np.array(
                 [
@@ -119,6 +147,7 @@ def arena_world_to_text_crowd_scenario(
             rec.set_obj_graph()
             scenario.add_object(rec)
 
+        # Convert Arena Door into Text-Crowd Passage
         for door in zone.doors:
             end = np.array(
                 [
