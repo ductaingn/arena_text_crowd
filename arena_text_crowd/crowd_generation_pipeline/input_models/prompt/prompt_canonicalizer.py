@@ -6,6 +6,10 @@ import os
 
 from google import genai
 
+from arena_text_crowd.crowd_generation_pipeline.input_models.prompt.start_goal_distr_llm_inference_client import (
+    LLMResponse,
+)
+
 LLM_INSTRUCTION = """
 Instruction:
 You will be given a sentence that describes the behavior of one or more groups of humans and their interactions with the
@@ -119,7 +123,6 @@ class PromptCanonicalizer:
         )
 
     def canonicalize(self, user_prompt: str) -> List[str]:
-        # TODO: Test
         print("Canonicalizing prompt ...")
         start = time.time()
         messages = [user_prompt]
@@ -142,3 +145,29 @@ class PromptCanonicalizer:
         group_size = [random.randint(1, 10)] * group_n
 
         return group_size
+
+    def canonicalize_from_zones(self, prompt: str, llm_response: LLMResponse):
+        parsed_zones = ""
+        for index, start_goal in enumerate(llm_response.start_goal_zones):
+            parsed_zones += f"\nGroup {index + 1}"
+            parsed_zones += f"\nStart: {start_goal.start.location}\tGoal: {start_goal.goal.location}"
+
+        print("Canonicalizing prompt ...")
+        start = time.time()
+        messages = []
+        messages.append(f'Given this sentence: "{prompt}".')
+        messages.append(
+            f" Translate the sentence, using these pairs of selected start and goal zones only: {parsed_zones}."
+        )
+        response = self.inference_client.models.generate_content(
+            model=self.model, contents=messages, config=self.generate_content_config
+        )
+        end = time.time()
+        answer = response.text
+        assert answer is not None
+
+        answer = answer.splitlines()
+
+        print(f"Canonicalizing done, took: {end - start:.1f}s")
+
+        return answer

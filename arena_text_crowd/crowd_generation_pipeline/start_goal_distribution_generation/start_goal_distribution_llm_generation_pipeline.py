@@ -14,12 +14,11 @@ from shapely import geometry as geom
 from arena_simulation_setup.tree.World import WorldDescription
 from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import (
     StartGoalDistrLLMInferenceClient,
-    StartGoalPair,
+)
+from arena_text_crowd.crowd_generation_pipeline.input_models.prompt.start_goal_distr_llm_inference_client import (
+    LLMResponse,
 )
 from arena_text_crowd.crowd_generation_pipeline.input_models.scenario import Scenario
-from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
-    Entrance,
-)
 from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
     AllSemanticObjects,
 )
@@ -40,7 +39,8 @@ class StartGoalDistrLLMGenerationPipeline:
         sg_distr = np.zeros((*self.sgdistr_size, 2), dtype=np.float32)
 
         transform_ = transform.from_bounds(
-            0, 0,
+            0,
+            0,
             text_crowd_scenario.scenario_config.window_size[0],
             text_crowd_scenario.scenario_config.window_size[1],
             self.sgdistr_size[0],
@@ -60,20 +60,21 @@ class StartGoalDistrLLMGenerationPipeline:
 
         # --- START ---
         start_area = next(
-            a for a in text_crowd_scenario.areas_dict[AllSemanticObjects.ENTRANCE]
+            a
+            for a in text_crowd_scenario.areas_dict[AllSemanticObjects.ENTRANCE]
             if a.name == start_goal_zone.start.name
         )
         mask(start_area, channel=0)
 
         # --- GOAL ---
         goal_area = next(
-            a for a in text_crowd_scenario.areas_dict[AllSemanticObjects.EXIT]
+            a
+            for a in text_crowd_scenario.areas_dict[AllSemanticObjects.EXIT]
             if a.name == start_goal_zone.goal.name
         )
         mask(goal_area, channel=1)
 
         return sg_distr
-
 
     def inference(
         self,
@@ -81,7 +82,7 @@ class StartGoalDistrLLMGenerationPipeline:
         text_crowd_scenario: Scenario,
         arena_world_description: WorldDescription,
         show: bool = False,
-    ):
+    ) -> Tuple[np.ndarray, LLMResponse]:
         """
         Parameters
         ----------
@@ -127,7 +128,7 @@ class StartGoalDistrLLMGenerationPipeline:
                 cv2.imshow("img", cat_img_resize / 255)
                 cv2.waitKey(0)
 
-        return sgdistr_all
+        return np.array(sgdistr_all), llm_response
 
 
 if __name__ == "__main__":
