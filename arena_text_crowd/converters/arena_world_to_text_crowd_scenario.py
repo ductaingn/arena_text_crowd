@@ -1,3 +1,4 @@
+from os import name
 from typing import Tuple
 
 import numpy as np
@@ -102,14 +103,24 @@ def arena_world_to_text_crowd_scenario(
         obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
 
         entrance = Entrance(
-            width=width, height=height, center=ctr, rotation=0, polygon=obj_poly
+            width=width,
+            height=height,
+            center=ctr,
+            rotation=0,
+            polygon=obj_poly,
+            name=zone.name,
         )
         entrance.set_infor()
         entrance.set_obj_graph()
         scenario.add_object(entrance)
 
         exit = Exit(
-            width=width, height=height, center=ctr, rotation=0, polygon=obj_poly
+            width=width,
+            height=height,
+            center=ctr,
+            rotation=0,
+            polygon=obj_poly,
+            name=zone.name,
         )
         exit.set_infor()
         exit.set_obj_graph()
@@ -179,6 +190,7 @@ def arena_world_to_text_crowd_scenario(
                 passage_width=height,  # Take whole length of the door as passage width
                 rotation=rotation / np.pi * 180.0,
                 polygon=obj_poly,
+                name=door.name,
             )
             passage.set_infor()
             passage.set_obj_graph()

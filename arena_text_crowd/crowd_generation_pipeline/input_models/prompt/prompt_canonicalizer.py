@@ -119,16 +119,19 @@ class PromptCanonicalizer:
         )
 
     def canonicalize(self, user_prompt: str) -> List[str]:
-        return ["A large group enters from the top left entrance, moves through the left passage, exits through the bottom left export."]
+        # TODO: Test
         print("Canonicalizing prompt ...")
         start = time.time()
         messages = [user_prompt]
         response = self.inference_client.models.generate_content(
             model=self.model, contents=messages, config=self.generate_content_config
         )
-
-        answer = response.text
         end = time.time()
+        answer = response.text
+        assert answer is not None
+
+        answer = answer.splitlines()
+
         print(f"Canonicalizing done, took: {end - start:.1f}s")
 
         return answer

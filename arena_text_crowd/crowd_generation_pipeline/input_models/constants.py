@@ -16,6 +16,58 @@ class AllSemanticObjects(enum.Enum):
     PASSAGE = "passage"  # Additional, TODO: Test
 
 
+SUPPORTED_ACTIONS = {
+    AllSemanticObjects.RECTANGLE: (
+        "passes",
+        "passes by",
+        "moves past",
+        "bypasses",
+        "circles around",
+    ),
+    AllSemanticObjects.TRIANGLE: (
+        "passes",
+        "passes by",
+        "moves past",
+        "bypasses",
+        "circles around",
+    ),
+    AllSemanticObjects.CIRCLE: (
+        "passes",
+        "passes by",
+        "moves past",
+        "bypasses",
+        "circles around",
+    ),
+    AllSemanticObjects.ZEBRA_CROSSING: (
+        "passes",
+        "passes by",
+        "moves past",
+        "crosses",
+        "walks across",
+        "moves across",
+    ),
+    AllSemanticObjects.PASSAGE: (
+        "passes",
+        "passes by",
+        "moves past",
+        "moves through",
+        "walks through",
+        "passes through",
+        "travels through",
+    ),
+    AllSemanticObjects.ENTRANCE: (
+        "enters from",
+        "gets in from",
+        "moves from",
+    ),
+    AllSemanticObjects.EXIT: (
+        "exits through",
+        "leaves through",
+        "quits through",
+    ),
+}
+
+
 class ParametersMode(enum.Enum):
     SIMPLE = "simple"
     HARD = "hard"

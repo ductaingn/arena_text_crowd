@@ -1,4 +1,15 @@
 from .prompt_canonicalizer import PromptCanonicalizer
-from .start_goal_distr_inference import StartGoalDistrLLMGeneration
+from .start_goal_distr_llm_inference_client import (
+    StartGoalDistrLLMInferenceClient,
+    LLMResponse,
+    Zone,
+    StartGoalPair,
+)
 
-__all__ = ["PromptCanonicalizer", "StartGoalDistrLLMGeneration"]
+__all__ = [
+    "PromptCanonicalizer",
+    "StartGoalDistrLLMInferenceClient",
+    "LLMResponse",
+    "Zone",
+    "StartGoalPair",
+]

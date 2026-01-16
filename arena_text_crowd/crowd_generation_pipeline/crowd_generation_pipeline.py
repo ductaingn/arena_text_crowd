@@ -156,15 +156,19 @@ class CrowdGenerationPipeline:
         return self.canonicalizer.get_group_size(canonicalized_des)
 
     def generate(self, scenario: Scenario, prompt: str):
-        semantic_map = np.array([scenario.get_semantic_map()])
-        canonicalized_descriptions = [self.get_canonicalized_des(prompt)]
+        canonicalized_descriptions = self.get_canonicalized_des(prompt)
         group_sizes = self.get_group_size(canonicalized_descriptions)
         group_n = len(group_sizes)
         print(canonicalized_descriptions)
 
+        semantic_map = scenario.get_semantic_map()
+        smaps = []
+        for _ in range(group_n):
+            smaps.append(copy.deepcopy(semantic_map))
+
         print("Inferring start and goal distributions...")
         pred_group_sgdistrs = self.sg_distr_gen_pipeline.inference(
-            smaps=copy.deepcopy(np.array(semantic_map)),
+            smaps=np.array(smaps),
             prompts=copy.deepcopy(canonicalized_descriptions),
             num_inference_steps=self.sg_distr_gen_config.num_inference_steps,
             guidance_scale=self.sg_distr_gen_config.guidance_scale,
@@ -177,7 +181,7 @@ class CrowdGenerationPipeline:
 
         print("Inferring fields...")
         pred_group_fields = self.vel_field_gen_pipeline.inference(
-            smaps=copy.deepcopy(np.array(semantic_map)),
+            smaps=np.array(smaps),
             prompts=copy.deepcopy(canonicalized_descriptions),
             sg_distrs=copy.deepcopy(pred_group_sgdistrs),
             num_inference_steps=self.vel_field_gen_config.num_inference_steps,

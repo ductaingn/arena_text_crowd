@@ -245,8 +245,6 @@ if __name__ == "__main__":
         arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
     )
 
-    semantic_map = np.array([scenario.get_semantic_map()])
-
     # Initialize velocity generation model
     vel_field_gen_config = VelocityFieldGenerationPipelineConfig(
         unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/Field-Full-V2/checkpoint-270000/unet"
@@ -281,14 +279,22 @@ if __name__ == "__main__":
         config=vel_field_gen_config,
     )
 
-    prompt = "A small group enters from the entrance, circles around the circle, exits through the exit"
+    prompt = "Two groups enter from the main entrance in the top right corner and both of them walk through the upper right passage first. Afterward, one group leaves at the bottom left exit. Another group follows a different path where they  exit through the bottom gate"
     prompt_canonicalizer = PromptCanonicalizer()
+    canonicalized_descriptions = prompt_canonicalizer.canonicalize(prompt)
+    group_sizes = prompt_canonicalizer.get_group_size(canonicalized_descriptions)
+    group_n = len(group_sizes)
+
+    semantic_map = scenario.get_semantic_map()
+    smaps = []
+    for _ in range(group_n):
+        smaps.append(copy.deepcopy(semantic_map))
 
     pred_group_sgdistrs = torch.randn(size=(1, 64, 64, 2))
 
     pred_group_fields = vel_field_gen_pipeline.inference(
-        smaps=copy.deepcopy(np.array(semantic_map)),
-        prompts=prompt_canonicalizer.canonicalize(prompt),
+        smaps=np.array(smaps),
+        prompts=canonicalized_descriptions,
         sg_distrs=copy.deepcopy(pred_group_sgdistrs),
         num_inference_steps=vel_field_gen_config.num_inference_steps,
         guidance_scale=vel_field_gen_config.guidance_scale,

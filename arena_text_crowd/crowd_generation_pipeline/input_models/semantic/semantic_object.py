@@ -65,8 +65,9 @@ class Rectangle(SemanticObject):
             random.uniform(area[0][0], area[0][1]),
             random.uniform(area[1][0], area[1][1]),
         ]
-        r, ag = random.uniform(size_range[0], size_range[1]) / 2, random.uniform(
-            30.0, 60.0
+        r, ag = (
+            random.uniform(size_range[0], size_range[1]) / 2,
+            random.uniform(30.0, 60.0),
         )
         w, h = (
             r * math.cos(ag / 180.0 * math.pi) * 2,
@@ -148,7 +149,9 @@ class Triangle(SemanticObject):
 
         self.points = points_list
         self.edges = edges_list
-        self.graph_box = copy.deepcopy(np.array(list(tri_inner.exterior.coords)[:-1]).tolist())
+        self.graph_box = copy.deepcopy(
+            np.array(list(tri_inner.exterior.coords)[:-1]).tolist()
+        )
 
     def set_infor(self):
         rec_vs = np.array(copy.deepcopy(self.vertexes))
@@ -199,7 +202,9 @@ class Circle(SemanticObject):
 
         self.points = points_list
         self.edges = edges_list
-        self.graph_box = copy.deepcopy(np.array(list(box_inner.exterior.coords)[:-1]).tolist())
+        self.graph_box = copy.deepcopy(
+            np.array(list(box_inner.exterior.coords)[:-1]).tolist()
+        )
 
     def set_infor(self):
         circle_edges = np.array(
@@ -231,8 +236,9 @@ class ZebraCrossing(SemanticObject):
             random.uniform(area[0][0], area[0][1]),
             random.uniform(area[1][0], area[1][1]),
         ]
-        r, ag = random.uniform(size_range[0], size_range[1]) / 2, random.uniform(
-            20.0, 40.0
+        r, ag = (
+            random.uniform(size_range[0], size_range[1]) / 2,
+            random.uniform(20.0, 40.0),
         )
         w, h = (
             r * math.cos(ag / 180.0 * math.pi) * 2,
@@ -292,7 +298,7 @@ class ZebraCrossing(SemanticObject):
         obj_buffer_inner.height += (obj_buffer_inner.graph_buffer - 1e-3) * 2
         obj_buffer_inner.set_infor()
         self.points = points_list
-        self.edges = edges_list 
+        self.edges = edges_list
         self.graph_box = copy.deepcopy(obj_buffer_inner.whole_box)
 
     def set_infor(self):  # TODO: Test
@@ -349,6 +355,7 @@ class Passage(SemanticObject):
     in_out_lines: List = attrs.field(init=False, default=[])
     free_space: List = attrs.field(init=False, default=[])
     obstacles: List = attrs.field(init=False, default=[])
+    name: str | None = None  # Use for Arena Door conversion
 
     @classmethod
     def random(cls, size_range, area) -> "Passage":
@@ -356,8 +363,9 @@ class Passage(SemanticObject):
             random.uniform(area[0][0], area[0][1]),
             random.uniform(area[1][0], area[1][1]),
         ]
-        r, ag = random.uniform(size_range[0], size_range[1]) / 2, random.uniform(
-            40.0, 60.0
+        r, ag = (
+            random.uniform(size_range[0], size_range[1]) / 2,
+            random.uniform(40.0, 60.0),
         )
         w, h = (
             r * math.cos(ag / 180.0 * math.pi) * 2,
@@ -465,6 +473,7 @@ class Entrance(SemanticObject):
     rotation: int  # degree
     graph_buffer = None
     whole_box: List = attrs.field(init=False, default=[])
+    name: str | None = None  # Use for Arena Zone conversion
 
     @classmethod
     def random(cls, size_range, area) -> "Entrance":
@@ -525,6 +534,7 @@ class Exit(SemanticObject):
     rotation: int  # degree
     graph_buffer = None
     whole_box: List = attrs.field(init=False, default=[])
+    name: str | None = None  # Use for Arena Zone conversion
 
     @classmethod
     def random(cls, size_range, area) -> "Exit":
@@ -575,3 +585,4 @@ class Exit(SemanticObject):
             )
         whole_box += np.array(self.center)
         self.whole_box = whole_box.tolist()
+

@@ -197,8 +197,6 @@ if __name__ == "__main__":
     )
     # scenario = Scenario.random(ScenarioConfig())
 
-    semantic_map = np.array([scenario.get_semantic_map()])
-
     sg_distr_gen_config = StartGoalDistrGenerationPipelineConfig(
         unet_dir="/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest/SgDistr-Full-V1/checkpoint-67000/unet"
     )
@@ -232,13 +230,22 @@ if __name__ == "__main__":
         config=sg_distr_gen_config,
     )
 
-    prompt = "A small group enters from the entrance, circles around the circle, exits through the exit"
+    prompt = "Two groups enter from the main entrance in the top right corner and both of them walk through the upper right passage first. Afterward, one group leaves at the bottom left exit. Another group follows a different path where they  exit through the bottom gate"
     prompt_canonicalizer = PromptCanonicalizer()
+    canonicalized_descriptions = prompt_canonicalizer.canonicalize(prompt)
+    print(canonicalized_descriptions)
+    group_sizes = prompt_canonicalizer.get_group_size(canonicalized_descriptions)
+    group_n = len(group_sizes)
+
+    semantic_map = scenario.get_semantic_map()
+    smaps = []
+    for _ in range(group_n):
+        smaps.append(copy.deepcopy(semantic_map))
 
     print("Inferring start and goal distributions...")
     pred_group_sgdistrs = sg_distr_gen_pipeline.inference(
-        smaps=copy.deepcopy(np.array(semantic_map)),
-        prompts=prompt_canonicalizer.canonicalize(prompt),
+        smaps=np.array(smaps),
+        prompts=canonicalized_descriptions,
         num_inference_steps=sg_distr_gen_config.num_inference_steps,
         guidance_scale=sg_distr_gen_config.guidance_scale,
         save_path=None,
