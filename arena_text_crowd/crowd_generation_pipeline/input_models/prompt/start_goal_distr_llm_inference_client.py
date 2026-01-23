@@ -26,8 +26,9 @@ real environment. The task is choosing the resonable start and goal zones for ea
 Do NOT explain anything. Output JSON only. Output must strictly follow this structure:
 ```json
 {
-"start_goal_zones": [
+"pedestrian_groups": [
     {
+        "num_pedestrians": <num_pedestrians>
         "start": {
             "name": <zone_name>,
             "location": <zone_location_description>
@@ -42,7 +43,8 @@ Do NOT explain anything. Output JSON only. Output must strictly follow this stru
 }
 ```
 In which:
-    - The `start_goal_zones` field contains a list of pairs of start and goal zones of each human group, each pair contains one `start` and one `goal`.
+    - The `pedestrian_groups` field contains a list of pairs of start and goal zones of each human group, and the size of that group, each contains one `start` and one `goal`.
+    - The `num_pedestrians` field contains the number of human in that group.
     - The `start` field contains informations about the chosen zone, in which:
         - `name` field is the exact name of the chosen zone given in the world description.
         - `location` field is the description of where the zone is in the world, in compare to the other zones.
@@ -58,13 +60,14 @@ class Zone(BaseModel):
     location: str
 
 
-class StartGoalPair(BaseModel):
+class PedestrianGroup(BaseModel):
+    num_pedestrians: int
     start: Zone
     goal: Zone
 
 
 class LLMResponse(BaseModel):
-    start_goal_zones: List[StartGoalPair]
+    pedestrian_groups: List[PedestrianGroup]
 
 
 class StartGoalDistrLLMInferenceClient:
@@ -170,6 +173,6 @@ class StartGoalDistrLLMInferenceClient:
         except json.JSONDecodeError as e:
             print(f"Failed to parse JSON from LLM response: {e}")
             print("Returning empty start and goal zones!")
-            start_goal_zones = LLMResponse(start_goal_zones=[])
+            start_goal_zones = LLMResponse(pedestrian_groups=[])
 
         return start_goal_zones

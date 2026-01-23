@@ -3,7 +3,7 @@ from .start_goal_distr_llm_inference_client import (
     StartGoalDistrLLMInferenceClient,
     LLMResponse,
     Zone,
-    StartGoalPair,
+    PedestrianGroup,
 )
 
 __all__ = [
@@ -11,5 +11,5 @@ __all__ = [
     "StartGoalDistrLLMInferenceClient",
     "LLMResponse",
     "Zone",
-    "StartGoalPair",
+    "PedestrianGroup",
 ]

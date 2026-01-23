@@ -1,4 +1,5 @@
 import copy
+from typing import Dict, List
 
 from arena_simulation_setup.tree.World import WorldDescription
 import attrs
@@ -50,9 +51,7 @@ class CrowdGenerationPipeline:
 
     sg_distr_gen_pipeline: SGDLLMGP = attrs.field(init=False)
     vel_field_gen_pipeline: VFGP = attrs.field(init=False)
-    canonicalizer: PromptCanonicalizer = attrs.field(
-        init=False, default=PromptCanonicalizer()
-    )
+    canonicalizer: PromptCanonicalizer = attrs.field(init=False)
 
     @sg_distr_gen_pipeline.default
     def _sg_distr_gen_pipeline_factory(self):
@@ -95,11 +94,56 @@ class CrowdGenerationPipeline:
             config=self.vel_field_gen_config,
         )
 
+    @canonicalizer.default
+    def canonicalizer_factory(self):
+        return PromptCanonicalizer(
+            self.generation_pipeline_config.model, self.generation_pipeline_config.top_p
+        )
+
     def get_canonicalized_des(self, prompt: str, llm_response: LLMResponse):
         """
         Get the canonicalized description text of groups, knowing the start and goal zones
         """
         return self.canonicalizer.canonicalize_from_zones(prompt, llm_response)
+
+    def sample_pedestrians(
+        self, llm_response: LLMResponse, arena_world_description: WorldDescription
+    ) -> List[Dict]:
+        pedestrians = []
+        for g_id, ped_group in enumerate(llm_response.pedestrian_groups):
+            n_peds = ped_group.num_pedestrians
+            x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
+            found_zone = False
+
+            # 1. Find the zone and calculate bounds
+            for zone in arena_world_description.zones:
+                if zone.name == ped_group.start.name:
+                    x_min = min(x_min, *(corner.x for corner in zone.corners))
+                    y_min = min(y_min, *(corner.y for corner in zone.corners))
+                    x_max = max(x_max, *(corner.x for corner in zone.corners))
+                    y_max = max(y_max, *(corner.y for corner in zone.corners))
+                    found_zone = True
+                    break  # Stop looking once the zone is found
+
+            # 2. Sample only if a valid zone was found
+            if found_zone:
+                x_pos = np.random.uniform(low=x_min, high=x_max, size=n_peds)
+                y_pos = np.random.uniform(low=y_min, high=y_max, size=n_peds)
+
+                for p_id, (x, y) in enumerate(zip(x_pos, y_pos)):
+                    pedestrians.append(
+                        {
+                            "name": f"hunav_{p_id}_group_{g_id}",
+                            "group_id": g_id,
+                            "pos": [x, y, 0.0],
+                        }
+                    )
+            else:
+                raise ValueError(
+                    f"Zone {ped_group.start.name} not found in world description."
+                )
+
+        return pedestrians
 
     def generate(
         self,
@@ -115,12 +159,18 @@ class CrowdGenerationPipeline:
             arena_world_description=arena_world_description,
             show=show,
         )
+        sampled_pedestrians = self.sample_pedestrians(
+            llm_response, arena_world_description
+        )
 
         canonicalized_descriptions = self.get_canonicalized_des(prompt, llm_response)
         group_n = len(canonicalized_descriptions)
-        print(canonicalized_descriptions)
+        assert group_n == len(llm_response.pedestrian_groups), (
+            f"Size of canonicalized_descriptions and pred_group_sgdistrs mismatch, got: {group_n} and {len(llm_response.pedestrian_groups)}, respectively."
+        )
 
         semantic_map = scenario.get_semantic_map()
+        # Create a copy of semantic map for each group
         smaps = []
         for _ in range(group_n):
             smaps.append(copy.deepcopy(semantic_map))
@@ -153,13 +203,13 @@ class CrowdGenerationPipeline:
                         (grid_size[0], grid_size[1], 1)
                     )
                 ),
-                0,
+                nan=0,
             )
             pred_group_fields[group_id][obs_coords[:, 0], obs_coords[:, 1]] = np.array(
                 [0.0, 0.0]
             )
 
-        return pred_group_fields
+        return pred_group_fields, sampled_pedestrians
 
 
 if __name__ == "__main__":

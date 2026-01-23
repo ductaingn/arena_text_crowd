@@ -35,7 +35,7 @@ class StartGoalDistrLLMGenerationPipeline:
         metadata={"description": "Equal to the original work"},
     )
 
-    def get_sg_distr(self, start_goal_zone, text_crowd_scenario):
+    def get_sg_distr(self, ped_group, text_crowd_scenario):
         sg_distr = np.zeros((*self.sgdistr_size, 2), dtype=np.float32)
 
         transform_ = transform.from_bounds(
@@ -62,7 +62,7 @@ class StartGoalDistrLLMGenerationPipeline:
         start_area = next(
             a
             for a in text_crowd_scenario.areas_dict[AllSemanticObjects.ENTRANCE]
-            if a.name == start_goal_zone.start.name
+            if a.name == ped_group.start.name
         )
         mask(start_area, channel=0)
 
@@ -70,7 +70,7 @@ class StartGoalDistrLLMGenerationPipeline:
         goal_area = next(
             a
             for a in text_crowd_scenario.areas_dict[AllSemanticObjects.EXIT]
-            if a.name == start_goal_zone.goal.name
+            if a.name == ped_group.goal.name
         )
         mask(goal_area, channel=1)
 
@@ -102,8 +102,8 @@ class StartGoalDistrLLMGenerationPipeline:
         smap = text_crowd_scenario.get_semantic_map()
 
         sgdistr_all: List[np.ndarray] = []
-        for start_goal_zone in llm_response.start_goal_zones:
-            sgdistr = self.get_sg_distr(start_goal_zone, text_crowd_scenario)
+        for ped_group in llm_response.pedestrian_groups:
+            sgdistr = self.get_sg_distr(ped_group, text_crowd_scenario)
             sgdistr_all.append(sgdistr)
 
             if show:

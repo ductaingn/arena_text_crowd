@@ -61,12 +61,12 @@ def arena_world_to_text_crowd_scenario(
 
     # Get Arena World size
     x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
-    for zones in arena_world_description.zones:
+    for zone in arena_world_description.zones:
         x_min, y_min, x_max, y_max = (
-            min(x_min, *(corner.x for corner in zones.corners)),
-            min(y_min, *(corner.y for corner in zones.corners)),
-            max(x_max, *(corner.x for corner in zones.corners)),
-            max(y_max, *(corner.y for corner in zones.corners)),
+            min(x_min, *(corner.x for corner in zone.corners)),
+            min(y_min, *(corner.y for corner in zone.corners)),
+            max(x_max, *(corner.x for corner in zone.corners)),
+            max(y_max, *(corner.y for corner in zone.corners)),
         )
     arena_world_size = (x_max - x_min, y_max - y_min)
 

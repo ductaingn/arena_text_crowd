@@ -106,16 +106,8 @@ class PromptCanonicalizer:
 
         self.inference_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-        self.cached_content = self.inference_client.caches.create(
-            model=self.model,
-            config=genai.types.CreateCachedContentConfig(
-                display_name="text-crowd-canonicalizer-instruction",
-                system_instruction=LLM_INSTRUCTION,
-            ),
-        )
-
         self.generate_content_config = genai.types.GenerateContentConfig(
-            cached_content=self.cached_content.name,
+            system_instruction=LLM_INSTRUCTION,
             top_p=self.top_p,
             thinking_config=genai.types.ThinkingConfig(
                 include_thoughts=False, thinking_budget=self.thinking_budget
@@ -148,17 +140,24 @@ class PromptCanonicalizer:
 
     def canonicalize_from_zones(self, prompt: str, llm_response: LLMResponse):
         parsed_zones = ""
-        for index, start_goal in enumerate(llm_response.start_goal_zones):
+        for index, ped_group in enumerate(llm_response.pedestrian_groups):
             parsed_zones += f"\nGroup {index + 1}"
-            parsed_zones += f"\nStart: {start_goal.start.location}\tGoal: {start_goal.goal.location}"
+            parsed_zones += (
+                f"\nStart: {ped_group.start.location}\tGoal: {ped_group.goal.location}"
+            )
 
         print("Canonicalizing prompt ...")
         start = time.time()
         messages = []
         messages.append(f'Given this sentence: "{prompt}".')
         messages.append(
-            f" Translate the sentence, using these pairs of selected start and goal zones only: {parsed_zones}."
+            f"Translate the sentence, using these pairs of selected start and goal zones only: {parsed_zones}."
         )
+        messages.append(
+            f"Translate the sentence into EXACTLY {len(llm_response.pedestrian_groups)} "
+            f"canonicalized sentences, one for each group identified above."
+        )
+
         response = self.inference_client.models.generate_content(
             model=self.model, contents=messages, config=self.generate_content_config
         )
