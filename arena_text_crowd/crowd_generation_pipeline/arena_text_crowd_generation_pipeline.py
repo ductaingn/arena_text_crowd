@@ -114,21 +114,7 @@ class CrowdGenerationPipeline:
     def sample_pedestrians(
         self,
         llm_response: LLMResponse,
-        text_crowd_scenario: Scenario,
-        arena_world_description: WorldDescription,
     ) -> List[Dict]:
-        # Get Arena World size
-        x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
-        for zone in arena_world_description.zones:
-            x_min, y_min, x_max, y_max = (
-                min(x_min, *(corner.x for corner in zone.corners)),
-                min(y_min, *(corner.y for corner in zone.corners)),
-                max(x_max, *(corner.x for corner in zone.corners)),
-                max(y_max, *(corner.y for corner in zone.corners)),
-            )
-        arena_world_size = (x_max - x_min, y_max - y_min)
-        scenario_size = text_crowd_scenario.scenario_config.window_size
-
         pedestrians = []
         for g_id, ped_group in enumerate(llm_response.pedestrian_groups):
             n_peds = ped_group.num_pedestrians
@@ -137,13 +123,6 @@ class CrowdGenerationPipeline:
                 ped_group.start.center_pos[1] - ped_group.start.size[1] / 2,
                 ped_group.start.center_pos[0] + ped_group.start.size[0] / 2,
                 ped_group.start.center_pos[1] + ped_group.start.size[1] / 2,
-            )
-
-            x_min, y_min, x_max, y_max = (
-                x_min / scenario_size[0] * arena_world_size[0],
-                y_min / scenario_size[1] * arena_world_size[1],
-                x_max / scenario_size[0] * arena_world_size[0],
-                y_max / scenario_size[1] * arena_world_size[1],
             )
 
             x_pos = np.random.uniform(low=x_min, high=x_max, size=n_peds)
@@ -179,9 +158,7 @@ class CrowdGenerationPipeline:
                 show=show,
             )
         )
-        sampled_pedestrians = self.sample_pedestrians(
-            llm_response, scenario, arena_world_description
-        )
+        sampled_pedestrians = self.sample_pedestrians(llm_response)
 
         canonicalized_descriptions = self.get_canonicalized_des(llm_response)
         group_n = len(canonicalized_descriptions)

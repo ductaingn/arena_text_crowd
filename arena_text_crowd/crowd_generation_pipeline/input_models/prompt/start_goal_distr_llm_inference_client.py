@@ -16,7 +16,7 @@ You will be given a sentence that describes the behavior of one or more groups o
 real environment. The task is choosing the resonable and relavant positions in the map for start and goal areas for each human group trajectory base on user prompt. The world information is provided in this Arena World JSON-formated data as described below: The map is composed of a list of zones. Each zone has the following fields:
     - `name`: a unique identifier.
     - `corners`: a list of 2D points [x, y] marking the zone's 4 corners.
-    - `pos`: a 2D point [x, y] marking the zone's position.
+    - `pos`: a 2D point [x, y] marking the zone's center position.
     - `doors`: a list of doors, each defined by its name and a 2D point marking its postion [<door name>, [x, y]].
 Do NOT explain anything. Output JSON only. Output must strictly follow this structure:
 ```json
@@ -350,7 +350,13 @@ class StartGoalDistrLLMInferenceClient:
                 "corners": [[corner.x, corner.y] for corner in zone.corners],
                 "pos": [zone.floor.pos.x, zone.floor.pos.y],
                 "doors": [
-                    [door.name, [(door.start.x+door.end.x)/2, (door.start.y+door.end.y)/2]]
+                    [
+                        door.name,
+                        [
+                            (door.start.x + door.end.x) / 2,
+                            (door.start.y + door.end.y) / 2,
+                        ],
+                    ]
                     for door in zone.doors
                 ],
             }
@@ -375,7 +381,6 @@ class StartGoalDistrLLMInferenceClient:
         parsed_mapping = "Arena World Entity | Supported Semantic Entity"
         for arena_entity, semantic_type in arena_entity_to_semantic_entity_map.items():
             parsed_mapping += f"\n{arena_entity} | {semantic_type}"
-        print(parsed_mapping)
         print("Start inference start and goal zones...")
         start = time.time()
         messages = []
