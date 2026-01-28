@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import copy
 
 import attrs
@@ -103,8 +103,8 @@ class StartGoalDistrLLMGenerationPipeline:
             ),
         )
         ctr = [
-            ped_group.start.size[0] * scenario_size[0] / arena_world_size[0],
-            ped_group.start.size[1] * scenario_size[1] / arena_world_size[1],
+            ped_group.start.center_pos[0] * scenario_size[0] / arena_world_size[0],
+            ped_group.start.center_pos[1] * scenario_size[1] / arena_world_size[1],
         ]
         box = vectors_rotation(
             np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
@@ -123,7 +123,7 @@ class StartGoalDistrLLMGenerationPipeline:
         )
         entrance.set_infor()
         entrance.set_obj_graph()
-        scenario.add_object(entrance)
+        text_crowd_scenario.add_object(entrance)
 
         mask(entrance, channel=0)
 
@@ -145,8 +145,8 @@ class StartGoalDistrLLMGenerationPipeline:
             ),
         )
         ctr = [
-            ped_group.goal.size[0] * scenario_size[0] / arena_world_size[0],
-            ped_group.goal.size[1] * scenario_size[1] / arena_world_size[1],
+            ped_group.goal.center_pos[0] * scenario_size[0] / arena_world_size[0],
+            ped_group.goal.center_pos[1] * scenario_size[1] / arena_world_size[1],
         ]
         box = vectors_rotation(
             np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
@@ -165,7 +165,7 @@ class StartGoalDistrLLMGenerationPipeline:
         )
         exit_.set_infor()
         exit_.set_obj_graph()
-        scenario.add_object(exit_)
+        text_crowd_scenario.add_object(exit_)
 
         mask(exit_, channel=1)
 
@@ -176,6 +176,7 @@ class StartGoalDistrLLMGenerationPipeline:
         prompt: str,
         text_crowd_scenario: Scenario,
         arena_world_description: WorldDescription,
+        arena_entity_to_semantic_entity_map: Dict[str, str],
         show: bool = False,
     ) -> Tuple[np.ndarray, LLMResponse, Scenario]:
         """
@@ -193,7 +194,9 @@ class StartGoalDistrLLMGenerationPipeline:
             raise ValueError(
                 "Invalid grid width! Valid grid width is scenario window size // 64"
             )
-        llm_response = self.inference_client.inference(prompt, arena_world_description)
+        llm_response = self.inference_client.inference(
+            prompt, arena_world_description, arena_entity_to_semantic_entity_map
+        )
 
         sgdistr_all: List[np.ndarray] = []
         for ped_group in llm_response.pedestrian_groups:

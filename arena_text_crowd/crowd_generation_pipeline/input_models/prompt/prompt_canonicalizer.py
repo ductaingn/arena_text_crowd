@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 import time
 import random
 
@@ -137,36 +137,3 @@ class PromptCanonicalizer:
         group_size = [random.randint(1, 10)] * group_n
 
         return group_size
-
-    def canonicalize_from_zones(self, prompt: str, llm_response: LLMResponse):
-        parsed_zones = ""
-        for index, ped_group in enumerate(llm_response.pedestrian_groups):
-            parsed_zones += f"\nGroup {index + 1}"
-            parsed_zones += (
-                f"\nStart: {ped_group.start.location}\tGoal: {ped_group.goal.location}"
-            )
-
-        print("Canonicalizing prompt ...")
-        start = time.time()
-        messages = []
-        messages.append(f'Given this sentence: "{prompt}".')
-        messages.append(
-            f"Translate the sentence, using these pairs of selected start and goal zones only: {parsed_zones}."
-        )
-        messages.append(
-            f"Translate the sentence into EXACTLY {len(llm_response.pedestrian_groups)} "
-            f"canonicalized sentences, one for each group identified above."
-        )
-
-        response = self.inference_client.models.generate_content(
-            model=self.model, contents=messages, config=self.generate_content_config
-        )
-        end = time.time()
-        answer = response.text
-        assert answer is not None
-
-        answer = answer.splitlines()
-
-        print(f"Canonicalizing done, took: {end - start:.1f}s")
-
-        return answer

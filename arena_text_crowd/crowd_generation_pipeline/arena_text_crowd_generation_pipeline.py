@@ -10,6 +10,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from diffusers import DDPMScheduler, UNet2DConditionModel
 
+from arena_text_crowd.crowd_generation_pipeline.input_models import prompt
 from arena_text_crowd.crowd_generation_pipeline.input_models.prompt.start_goal_distr_llm_inference_client import (
     LLMResponse,
 )
@@ -100,47 +101,62 @@ class CrowdGenerationPipeline:
             self.generation_pipeline_config.model, self.generation_pipeline_config.top_p
         )
 
-    def get_canonicalized_des(self, prompt: str, llm_response: LLMResponse):
+    def get_canonicalized_des(self, llm_response: LLMResponse):
         """
         Get the canonicalized description text of groups, knowing the start and goal zones
         """
-        return self.canonicalizer.canonicalize_from_zones(prompt, llm_response)
+        des = []
+        for ped_group in llm_response.pedestrian_groups:
+            des.append(ped_group.group_description)
+
+        return des
 
     def sample_pedestrians(
-        self, llm_response: LLMResponse, arena_world_description: WorldDescription
+        self,
+        llm_response: LLMResponse,
+        text_crowd_scenario: Scenario,
+        arena_world_description: WorldDescription,
     ) -> List[Dict]:
+        # Get Arena World size
+        x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
+        for zone in arena_world_description.zones:
+            x_min, y_min, x_max, y_max = (
+                min(x_min, *(corner.x for corner in zone.corners)),
+                min(y_min, *(corner.y for corner in zone.corners)),
+                max(x_max, *(corner.x for corner in zone.corners)),
+                max(y_max, *(corner.y for corner in zone.corners)),
+            )
+        arena_world_size = (x_max - x_min, y_max - y_min)
+        scenario_size = text_crowd_scenario.scenario_config.window_size
+
         pedestrians = []
         for g_id, ped_group in enumerate(llm_response.pedestrian_groups):
             n_peds = ped_group.num_pedestrians
-            x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
-            found_zone = False
+            x_min, y_min, x_max, y_max = (
+                ped_group.start.center_pos[0] - ped_group.start.size[0] / 2,
+                ped_group.start.center_pos[1] - ped_group.start.size[1] / 2,
+                ped_group.start.center_pos[0] + ped_group.start.size[0] / 2,
+                ped_group.start.center_pos[1] + ped_group.start.size[1] / 2,
+            )
 
-            # 1. Find the zone and calculate bounds
-            for zone in arena_world_description.zones:
-                if zone.name == ped_group.start.name:
-                    x_min = min(x_min, *(corner.x for corner in zone.corners))
-                    y_min = min(y_min, *(corner.y for corner in zone.corners))
-                    x_max = max(x_max, *(corner.x for corner in zone.corners))
-                    y_max = max(y_max, *(corner.y for corner in zone.corners))
-                    found_zone = True
-                    break  # Stop looking once the zone is found
+            x_min, y_min, x_max, y_max = (
+                x_min / scenario_size[0] * arena_world_size[0],
+                y_min / scenario_size[1] * arena_world_size[1],
+                x_max / scenario_size[0] * arena_world_size[0],
+                y_max / scenario_size[1] * arena_world_size[1],
+            )
 
-            # 2. Sample only if a valid zone was found
-            if found_zone:
-                x_pos = np.random.uniform(low=x_min, high=x_max, size=n_peds)
-                y_pos = np.random.uniform(low=y_min, high=y_max, size=n_peds)
-
-                for p_id, (x, y) in enumerate(zip(x_pos, y_pos)):
-                    pedestrians.append(
-                        {
-                            "name": f"hunav_{p_id}_group_{g_id}",
-                            "group_id": g_id,
-                            "pos": [x, y, 0.0],
-                        }
-                    )
-            else:
-                raise ValueError(
-                    f"Zone {ped_group.start.name} not found in world description."
+            x_pos = np.random.uniform(low=x_min, high=x_max, size=n_peds)
+            y_pos = np.random.uniform(low=y_min, high=y_max, size=n_peds)
+            models = np.random.choice(ped_group.human_models, size=n_peds)
+            for p_id, (x, y, model) in enumerate(zip(x_pos, y_pos, models)):
+                pedestrians.append(
+                    {
+                        "name": f"hunav_{p_id}_group_{g_id}",
+                        "group_id": g_id,
+                        "pos": [x, y, 0.0],
+                        "model": model,
+                    }
                 )
 
         return pedestrians
@@ -150,6 +166,7 @@ class CrowdGenerationPipeline:
         prompt: str,
         scenario: Scenario,
         arena_world_description: WorldDescription,
+        arena_entity_to_semantic_entity_map: Dict[str, str],
         show: bool = False,
     ):
         print("Inferring start and goal distributions...")
@@ -158,18 +175,16 @@ class CrowdGenerationPipeline:
                 prompt=prompt,
                 text_crowd_scenario=scenario,
                 arena_world_description=arena_world_description,
+                arena_entity_to_semantic_entity_map=arena_entity_to_semantic_entity_map,
                 show=show,
             )
         )
         sampled_pedestrians = self.sample_pedestrians(
-            llm_response, arena_world_description
+            llm_response, scenario, arena_world_description
         )
 
-        canonicalized_descriptions = self.get_canonicalized_des(prompt, llm_response)
+        canonicalized_descriptions = self.get_canonicalized_des(llm_response)
         group_n = len(canonicalized_descriptions)
-        assert group_n == len(llm_response.pedestrian_groups), (
-            f"Size of canonicalized_descriptions and pred_group_sgdistrs mismatch, got: {group_n} and {len(llm_response.pedestrian_groups)}, respectively."
-        )
 
         semantic_map = scenario.get_semantic_map()
         # Create a copy of semantic map for each group
@@ -225,7 +240,7 @@ if __name__ == "__main__":
         "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
     )
     arena_world = World(path=world_path)
-    scenario = arena_world_to_text_crowd_scenario(
+    scenario, entity_mapping = arena_world_to_text_crowd_scenario(
         arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
     )
 
@@ -240,11 +255,13 @@ if __name__ == "__main__":
         ),
     )
 
-    prompt = "Two groups enter from the main entrance in the top right corner and both of them walk through the upper right passage first. Afterward, one group leaves at the bottom left exit. Another group follows a different path where they  exit through the bottom gate"
-    pred_velocity_field = crowd_generation_pipeline.generate(
+    prompt = "People run out of their room, to the hallways, and through the main hallway entrance. There should be about 5 people in each room."
+    pred_velocity_field, sampled_peds = crowd_generation_pipeline.generate(
         prompt=prompt,
         scenario=scenario,
         arena_world_description=arena_world.load(),
+        arena_entity_to_semantic_entity_map=entity_mapping,
         show=True,
     )
     print(pred_velocity_field.shape)
+    print(f"Sampled pedestrians: {sampled_peds}")
