@@ -153,11 +153,13 @@ class CrowdGenerationPipeline:
         show: bool = False,
     ):
         print("Inferring start and goal distributions...")
-        pred_group_sgdistrs, llm_response = self.sg_distr_gen_pipeline.inference(
-            prompt=prompt,
-            text_crowd_scenario=scenario,
-            arena_world_description=arena_world_description,
-            show=show,
+        pred_group_sgdistrs, llm_response, scenario = (
+            self.sg_distr_gen_pipeline.inference(
+                prompt=prompt,
+                text_crowd_scenario=scenario,
+                arena_world_description=arena_world_description,
+                show=show,
+            )
         )
         sampled_pedestrians = self.sample_pedestrians(
             llm_response, arena_world_description

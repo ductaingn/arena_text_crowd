@@ -1,5 +1,4 @@
-from os import name
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 
@@ -17,6 +16,7 @@ from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_o
     Exit,
     Passage,
     Rectangle,
+    ZebraCrossing,
 )
 from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
     AllSemanticObjects,
@@ -35,6 +35,9 @@ def arena_world_to_text_crowd_scenario(
     arena_world: World | WorldDescription,
     scenario_size: Tuple[int, int] = (800, 800),
     wall_thickness: float = 0.5,
+    *,
+    entrances: List[Entrance] | None = None,
+    exits: List[Entrance] | None = None,
 ) -> Scenario:
     """
     Convert an Arena World into a Text-Crowd Scenario, keep corners and walls only, Arena Zones is considered as entrances and exits.
@@ -50,6 +53,10 @@ def arena_world_to_text_crowd_scenario(
             Size (width, height) of a Text-Crowd Scenario (it's a 2D grid map)
         wall_thickness: float
             Walls in Arena World will be converted into Rectangle in Text-Crowd Scenario, hence the wall thickness
+        entrances: List[Entrance]
+            List of entrances
+        exits: List[Exit]
+            List of exits
 
     Returns:
         scenario : Scenario
@@ -73,58 +80,73 @@ def arena_world_to_text_crowd_scenario(
     scenario = Scenario(ScenarioConfig(window_size=scenario_size))
 
     for zone in arena_world_description.zones:
-        # Turn every Arena Zone into a Text-Crowd Entrance/Exit
-        scenario_entrance_range = scenario.scenario_config.objects[
-            AllSemanticObjects.ENTRANCE
-        ].size_range
-        width, height = (
-            clamp(
-                zone.floor.x_length * scenario_size[0] / arena_world_size[0]
-                - wall_thickness,
-                scenario_entrance_range[0],
-                scenario_entrance_range[1],
-            ),
-            clamp(
-                zone.floor.y_length * scenario_size[1] / arena_world_size[1]
-                - wall_thickness,
-                scenario_entrance_range[0],
-                scenario_entrance_range[1],
-            ),
-        )
-        ctr = [
-            zone.floor.pos.x * scenario_size[0] / arena_world_size[0],
-            zone.floor.pos.y * scenario_size[1] / arena_world_size[1],
-        ]
-        box = vectors_rotation(
-            np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
-            0,
-        )
-        box = (np.array(box) + np.array(ctr)).tolist()
-        obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
+        if entrances and not exits:
+            raise ValueError("Missing exits")
+        elif not entrances and exits:
+            raise ValueError("Missing entrances")
+        elif entrances and exits:
+            for entrance in entrances:
+                entrance.set_infor()
+                entrance.set_obj_graph()
+                scenario.add_object(entrance)
 
-        entrance = Entrance(
-            width=width,
-            height=height,
-            center=ctr,
-            rotation=0,
-            polygon=obj_poly,
-            name=zone.name,
-        )
-        entrance.set_infor()
-        entrance.set_obj_graph()
-        scenario.add_object(entrance)
+            for exit_ in exits:
+                exit_.set_infor()
+                exit_.set_obj_graph()
+                scenario.add_object(exit_)
+        else:
+            # Turn every Arena Zone into a Text-Crowd Entrance/Exit
+            scenario_entrance_range = scenario.scenario_config.objects[
+                AllSemanticObjects.ENTRANCE
+            ].size_range
+            width, height = (
+                clamp(
+                    zone.floor.x_length * scenario_size[0] / arena_world_size[0]
+                    - wall_thickness,
+                    scenario_entrance_range[0],
+                    scenario_entrance_range[1],
+                ),
+                clamp(
+                    zone.floor.y_length * scenario_size[1] / arena_world_size[1]
+                    - wall_thickness,
+                    scenario_entrance_range[0],
+                    scenario_entrance_range[1],
+                ),
+            )
+            ctr = [
+                zone.floor.pos.x * scenario_size[0] / arena_world_size[0],
+                zone.floor.pos.y * scenario_size[1] / arena_world_size[1],
+            ]
+            box = vectors_rotation(
+                np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
+                0,
+            )
+            box = (np.array(box) + np.array(ctr)).tolist()
+            obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
 
-        exit = Exit(
-            width=width,
-            height=height,
-            center=ctr,
-            rotation=0,
-            polygon=obj_poly,
-            name=zone.name,
-        )
-        exit.set_infor()
-        exit.set_obj_graph()
-        scenario.add_object(exit)
+            entrance = Entrance(
+                width=width,
+                height=height,
+                center=ctr,
+                rotation=0,
+                polygon=obj_poly,
+                name=zone.name,
+            )
+            entrance.set_infor()
+            entrance.set_obj_graph()
+            scenario.add_object(entrance)
+
+            exit = Exit(
+                width=width,
+                height=height,
+                center=ctr,
+                rotation=0,
+                polygon=obj_poly,
+                name=zone.name,
+            )
+            exit.set_infor()
+            exit.set_obj_graph()
+            scenario.add_object(exit)
 
         # Convert Arena Wall into Text-Crowd Rectangle
         # Assuming the length of the wall is the corresponding rectangle height,
@@ -191,6 +213,44 @@ def arena_world_to_text_crowd_scenario(
                 rotation=rotation / np.pi * 180.0,
                 polygon=obj_poly,
                 name=door.name,
+            )
+            passage.set_infor()
+            passage.set_obj_graph()
+            scenario.add_object(passage)
+
+        # Convert hallways into Text-Crowd Zebra Crossing
+        if "hallway" in zone.name or "corridor" in zone.name:
+            width, height, rot = (
+                zone.floor.x_length * scenario_size[0] / arena_world_size[0]
+                - wall_thickness,
+                zone.floor.y_length * scenario_size[1] / arena_world_size[1]
+                - wall_thickness,
+                0,
+            )
+
+            if width > height:
+                temp = width
+                width = height
+                height = temp
+                rot = 90
+            ctr = [
+                zone.floor.pos.x * scenario_size[0] / arena_world_size[0],
+                zone.floor.pos.y * scenario_size[1] / arena_world_size[1],
+            ]
+            zb_w = width / 15 - 1e-6
+            box = vectors_rotation(
+                np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
+                rot,
+            )
+            box = (np.array(box) + np.array(ctr)).tolist()
+            obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
+            passage = ZebraCrossing(
+                width=height,
+                height=width,
+                center=ctr,
+                zb_line_width=zb_w,
+                rotation=rot,
+                polygon=obj_poly,
             )
             passage.set_infor()
             passage.set_obj_graph()

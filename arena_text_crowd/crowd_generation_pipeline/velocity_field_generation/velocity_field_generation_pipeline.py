@@ -221,8 +221,6 @@ class VelocityFieldGenerationPipeline:
                 cv2.imwrite(
                     os.path.join(save_path, "dt_" + str(dt_id) + ".jpg"), cat_img
                 )
-        if save_path is not None:
-            np.save(os.path.join(save_path, "texts.npy"), {"texts": prompts_})
 
         return np.array(fields_all)
 

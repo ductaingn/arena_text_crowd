@@ -13,7 +13,7 @@ from arena_simulation_setup.tree.World import WorldDescription
 
 LLM_INSTRUCTION = """
 You will be given a sentence that describes the behavior of one or more groups of humans and their interactions with the
-real environment. The task is choosing the resonable start and goal zones for each human group trajectory. The world information is provided in this JSON-formated data as described below: The map is composed of a list of zones. Each zone has the following fields:
+real environment. The task is choosing the resonable start and goal regions for each human group trajectory. The world information is provided in this JSON-formated data as described below: The map is composed of a list of zones. Each zone has the following fields:
     - `name`: a unique identifier.
     - `corners`: a list of 2D points [x, y] marking the zone's corners, you can calculate the zone's position and coverage, and check if a point is within a zone or not base on these points.
     - `walls`: a list of wall segments, each defined by two 2D points [[x1, y1], [x2, y2]].
@@ -28,13 +28,20 @@ Do NOT explain anything. Output JSON only. Output must strictly follow this stru
 {
 "pedestrian_groups": [
     {
-        "num_pedestrians": <num_pedestrians>
+        "num_pedestrians": <num_pedestrians>,
+        "human_models": [
+            <model_1>,
+            ...
+            <model_n>
+        ]
         "start": {
-            "name": <zone_name>,
+            "center_pos": [<x>,<y>],
+            "size": <width, height>,
             "location": <zone_location_description>
         },
         "goal": {
-            "name": <zone_name>,
+            "center_pos": [<x>,<y>],
+            "size": <width, height>,
             "location": <zone_location_description>
         },
     },
@@ -45,18 +52,20 @@ Do NOT explain anything. Output JSON only. Output must strictly follow this stru
 In which:
     - The `pedestrian_groups` field contains a list of pairs of start and goal zones of each human group, and the size of that group, each contains one `start` and one `goal`.
     - The `num_pedestrians` field contains the number of human in that group.
+    - The `human_models` field contains relavant the models that later can be used to sample the human group. The available models are: ["female_adult_business_02", "female_adult_medical_01", "female_adult_police_01", "female_adult_police_02", "female_adult_police_03", "male_adult_construction_01", "male_adult_construction_02", "male_adult_construction_03", "male_adult_construction_05", "male_adult_medical_01", "male_adult_police_04"]
     - The `start` field contains informations about the chosen zone, in which:
-        - `name` field is the exact name of the chosen zone given in the world description.
+        - `center_pos` field contains the coordinates of the center of the chosen region.
+        - `size` field contains the width and height of the chosen region.
         - `location` field is the description of where the zone is in the world, in compare to the other zones.
-    - The `goal` field contains informations about the chosen zone, in which:
-        - `name` field is the exact name of the chosen zone given in the world description.
-        - `location` field is the description of where the zone is in the world, in compare to the other zones.
+    - The `goal` field contains informations about the chosen zone, in which, the `coners` and `location` fiels are similar to those in the `start` field.
     - The `location` value can only be chosen from this dictionary: ["right, "upper right", "upper", "upper left", "left", "lower left", "lower", "lower right", "top right", "top", "top left", "bottom left", "bottom", "bottom right", "middle", "center"] or something similar.
+You should decide the start and goal regions base on user prompt and find relavant positions in the map.
 """
 
 
 class Zone(BaseModel):
-    name: str
+    center_pos: List[float]
+    size: List[float]
     location: str
 
 
