@@ -378,7 +378,6 @@ class StartGoalDistrLLMInferenceClient:
                 Start and goal pair for each group.
         """
         world_info = self.preprocess_world_description(arena_world_desc)
-        print(world_info)
         parsed_mapping = "Arena World Entity | Supported Semantic Entity"
         for arena_entity, semantic_type in arena_entity_to_semantic_entity_map.items():
             parsed_mapping += f"\n{arena_entity} | {semantic_type}"

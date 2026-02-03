@@ -37,6 +37,7 @@ from arena_text_crowd.crowd_generation_pipeline.input_models.prompt import (
 class ArenaTextCrowdGenerationPipelineConfig:
     # 2d sim
     visual: bool = True
+    save_path: str | None = None
 
     # LLM configuration
     model: str = "gemini-2.5-flash"
@@ -161,6 +162,7 @@ class CrowdGenerationPipeline:
         sampled_pedestrians = self.sample_pedestrians(llm_response)
 
         canonicalized_descriptions = self.get_canonicalized_des(llm_response)
+        print(f"Canonicalized descriptions: {canonicalized_descriptions}")
         group_n = len(canonicalized_descriptions)
 
         semantic_map = scenario.get_semantic_map()
@@ -176,7 +178,7 @@ class CrowdGenerationPipeline:
             sg_distrs=copy.deepcopy(pred_group_sgdistrs),
             num_inference_steps=self.vel_field_gen_config.num_inference_steps,
             guidance_scale=self.vel_field_gen_config.guidance_scale,
-            save_path=None,
+            save_path=self.generation_pipeline_config.save_path,
             show=show,
         )
 
@@ -202,6 +204,9 @@ class CrowdGenerationPipeline:
             pred_group_fields[group_id][obs_coords[:, 0], obs_coords[:, 1]] = np.array(
                 [0.0, 0.0]
             )
+
+        # Access velocity at (x,y) with field[group_id, y, x]
+        pred_group_fields = np.transpose(pred_group_fields, axes=(0, 2, 1, 3))
 
         return pred_group_fields, sampled_pedestrians
 

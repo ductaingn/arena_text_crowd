@@ -219,7 +219,22 @@ class VelocityFieldGenerationPipeline:
                 cv2.waitKey(0)
             if save_path is not None:
                 cv2.imwrite(
-                    os.path.join(save_path, "dt_" + str(dt_id) + ".jpg"), cat_img
+                    os.path.join(save_path, "dt_" + str(dt_id) + ".jpg"),
+                    cat_img,
+                )
+                cv2.imwrite(
+                    os.path.join(save_path, "smap_dt_" + str(dt_id) + ".jpg"),
+                    smap_large,
+                )
+                cv2.imwrite(
+                    os.path.join(
+                        save_path, "start_goal_distr_dt_" + str(dt_id) + ".jpg"
+                    ),
+                    distr_large,
+                )
+                cv2.imwrite(
+                    os.path.join(save_path, "velocity_field_dt_" + str(dt_id) + ".jpg"),
+                    field_cvimg,
                 )
 
         return np.array(fields_all)
