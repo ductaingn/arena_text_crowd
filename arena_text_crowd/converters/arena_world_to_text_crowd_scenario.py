@@ -37,7 +37,7 @@ def arena_world_to_text_crowd_scenario(
     wall_thickness: float = 0.5,
     *,
     entrances: List[Entrance] | None = None,
-    exits: List[Entrance] | None = None,
+    exits: List[Exit] | None = None,
 ) -> Tuple[Scenario, Dict[str, str]]:
     """
     Convert an Arena World into a Text-Crowd Scenario, keep corners and walls only, Arena Zones is considered as entrances and exits.
@@ -166,7 +166,9 @@ def arena_world_to_text_crowd_scenario(
             passage.set_infor()
             passage.set_obj_graph()
             scenario.add_object(passage)
-            arena_entity_to_semantic_entity_map[door.name] = AllSemanticObjects.PASSAGE.value
+            arena_entity_to_semantic_entity_map[door.name] = (
+                AllSemanticObjects.PASSAGE.value
+            )
 
         # Convert hallways into Text-Crowd Zebra Crossing
         if "hallway" in zone.name or "corridor" in zone.name:
@@ -175,14 +177,14 @@ def arena_world_to_text_crowd_scenario(
                 - wall_thickness,
                 zone.floor.y_length * scenario_size[1] / arena_world_size[1]
                 - wall_thickness,
-                0,
+                90,
             )
 
             if width > height:
                 temp = width
                 width = height
                 height = temp
-                rot = 90
+                rot = 0
             ctr = [
                 zone.floor.pos.x * scenario_size[0] / arena_world_size[0],
                 zone.floor.pos.y * scenario_size[1] / arena_world_size[1],
@@ -205,7 +207,9 @@ def arena_world_to_text_crowd_scenario(
             passage.set_infor()
             passage.set_obj_graph()
             scenario.add_object(passage)
-            arena_entity_to_semantic_entity_map[zone.name] = AllSemanticObjects.ZEBRA_CROSSING.value
+            arena_entity_to_semantic_entity_map[zone.name] = (
+                AllSemanticObjects.ZEBRA_CROSSING.value
+            )
 
     for obstacle in arena_world_description.all_static_entities:
         # TODO: Implement
@@ -213,6 +217,27 @@ def arena_world_to_text_crowd_scenario(
         # object = ObjectAnnotation(obstacle.name, ...)
         # rec = Rectangle(polygon=object.bounding_box)
         # scenario.add_object(rec)
+
+    # Hard coded empty space for world `hospital_1`
+    empty_spaces = [[17.1, 7.0, [21.5, 25.65]], [4.05, 2.95, [23.525, 15.075]]]
+    for zone in empty_spaces:
+        height, width, ctr = zone
+        height = height * scenario_size[1] / arena_world_size[1]
+        width = width * scenario_size[0] / arena_world_size[0]
+        ctr = [
+            ctr[0] * scenario_size[0] / arena_world_size[0],
+            ctr[1] * scenario_size[1] / arena_world_size[1],
+        ]
+        box = vectors_rotation(
+            np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
+            0,
+        )
+        box = (np.array(box) + ctr).tolist()
+        obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
+        rec = Rectangle(width=width, height=height, polygon=obj_poly, vertexes=box)
+        rec.set_infor()
+        rec.set_obj_graph()
+        scenario.add_object(rec)
 
     return scenario, arena_entity_to_semantic_entity_map
 
@@ -225,8 +250,8 @@ if __name__ == "__main__":
         "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
     )
     arena_world = World(path=world_path)
-    text_crowd_scenario, arena_entity_to_semantic_entity_map = arena_world_to_text_crowd_scenario(
-        arena_world=arena_world, wall_thickness=1.0
+    text_crowd_scenario, arena_entity_to_semantic_entity_map = (
+        arena_world_to_text_crowd_scenario(arena_world=arena_world, wall_thickness=1.0)
     )
 
     fld = Field(text_crowd_scenario, grid_width=20.0)

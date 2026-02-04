@@ -11,6 +11,13 @@ from scipy.interpolate import griddata
 
 import pyglet.window.key
 
+from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
+    AllSemanticObjects,
+)
+from arena_text_crowd.crowd_generation_pipeline.input_models.semantic.semantic_object import (
+    Exit,
+)
+
 from ..utils.utils import interp_grid_closest_4, interp_grid_fast
 from ..utils.field import Field, Grid
 from ..input_models.scenario import Scenario
@@ -267,180 +274,125 @@ class FieldEnv(ORCAEnv):
         self.viewer.set_arrows(np.array(arrows), np.array(arrow_colors))
 
 
+def sample_field_at(pos, grid: Grid, field: np.ndarray):
+    gx = int(pos[0] / grid.grid_width)
+    gy = int(pos[1] / grid.grid_width)
+    if gx < 0 or gy < 0 or gx >= grid.grid_size[0] or gy >= grid.grid_size[1]:
+        return None
+
+    return field[gx][gy]
+
+
+def reached_goal(pos, goal: Exit):
+    if (
+        goal.center[0] - goal.width <= pos[0] <= goal.center[0] + goal.width
+        and goal.center[1] - goal.height <= pos[1] <= goal.center[1] + goal.height
+    ):
+        return True
+    return False
+
+
 if __name__ == "__main__":
-    from Simulators.Field_Generators.CurveTracking_Field import CurveTracking_Field
-    from Simulators.Field_Generators.Navigation_Field import Navigation_Field
+    import os
+    from pathlib import Path
+    from arena_simulation_setup.tree.World import World
+    from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
 
-    agent_n = 200
-    group_n = 2
-    groups_centers = [[50, 50], [750, 50]]
-    groups_goals = [[750, 750], [50, 570]]
-    groups_agents = [50, 50]
-    groups_colors = [[255, 128, 0], [135, 200, 240]]
+    # Create Text-Crowd scenario from Arena World
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    )
+    arena_world = World(path=world_path)
+    scenario, entity_mapping = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
+    )
+    window_size = scenario.scenario_config.window_size
+    fld_env = FieldEnv(scenario, [], True)
+    field = Field(scenario, 16)
+
+    velocity_fields = np.load(f"{os.environ['HOME']}/Desktop/velocity_field.npy")
+    velocity_fields = np.transpose(velocity_fields, (0, 2, 1, 3))
+
     groups_fields = []
-    # generate groups settings
-    agent_params = {"init_agent_params": []}
-    aid = 0
-    for gid in range(group_n):
-        gf_i = {"agent_ids": [], "field": None, "grid": None}
-        for gaid in range(groups_agents[gid]):
-            ai_params = copy.deepcopy(AGNET_PARAM_DEFAULT)
-            ai_params["pos"] = [
-                random.uniform(
-                    groups_centers[gid][0] - 40, groups_centers[gid][0] + 40
-                ),
-                random.uniform(
-                    groups_centers[gid][1] - 40, groups_centers[gid][1] + 40
-                ),
-            ]
-            ai_params["goal_pos"] = copy.deepcopy(groups_goals[gid])
-            ai_params["radius"] = 3
-            ai_params["pref_speed"] = 6
-            ai_params["color"] = groups_colors[gid]
-            agent_params["init_agent_params"].append(copy.deepcopy(ai_params))
-            gf_i["agent_ids"].append(aid)
-            aid += 1
-        groups_fields.append(copy.deepcopy(gf_i))
-    for rst_aid in range(aid, agent_n):
-        ai_params = copy.deepcopy(AGNET_PARAM_DEFAULT)
-        ai_params["pos"] = [-1000, -1000]
-        ai_params["radius"] = 3
-        agent_params["init_agent_params"].append(copy.deepcopy(ai_params))
+    for vel_field in velocity_fields:
+        groups_fields.append(GroupField([], vel_field, field.grid))
 
-    scenario_test = {
-        "wind_size": [1024, 1024],
-        "obs_list": [
+    # Visualize velocity field
+    N_FLOW = 64 * 64
+    TRAIL_LEN = 12
+    GROUP_ID = 1  # Group to be visualized
+    x = np.random.uniform(0, window_size[0], N_FLOW)
+    y = np.random.uniform(0, window_size[1], N_FLOW)
+    flow_particles = []
+
+    for _x, _y in zip(x, y):
+        vl = fld_env.viewer.add_flow_particle(
+            trail_len=TRAIL_LEN,
+            color=[103, 58, 183],
+        )
+
+        flow_particles.append(
             {
-                "type": "rectangle",
-                "params": {
-                    "vertexes": [[100, 400], [200, 400], [200, 500], [100, 500]]
-                },
-                "attributes": {},
-            },
-            {
-                "type": "triangle",
-                "params": {"vertexes": [[150, 150], [250, 150], [150, 250]]},
-                "attributes": {},
-            },
-            {
-                "type": "circle",
-                "params": {"center": [400, 400], "radius": 50},
-                "attributes": {},
-            },
-        ],
-        "zebra_crossing_list": [],
-        "passages_list": [],
-        "areas_list": [],
-    }
-
-    fld_env = FieldEnv(agent_num=agent_n, visual=True, draw_scale=1.0)
-    fld_env.reset(
-        scenario=copy.deepcopy(scenario_test), agent_setting=copy.deepcopy(agent_params)
-    )
-
-    crv_fld = CurveTracking_Field(
-        reverse_direction=False,
-        vr=1,
-        kf=0.008,
-        flag_follow_obstacle=True,
-        epsilon=0,
-        switch_dist_0=60,
-        switch_dist=40,
-        lidar_N=256,
-    )
-
-    # field for group 1
-    grid_width = 20.0
-    guidance1 = {
-        "type": "lines",
-        "params": {
-            "lines": [
-                [[50, 50], [50, 600]],
-                [[50, 600], [300, 600]],
-                [[300, 600], [300, 300]],
-                [[300, 300], [500, 300]],
-                [[500, 300], [500, 500]],
-                [[500, 500], [750, 750]],
-            ],
-            "width": 150,  # influence width
-            "decay_rate": 0.9,  # decay rate of the guidance field along width
-        },
-    }
-    constrains = {
-        "filter_path_n_average": 0,
-        "closed_path_flag": False,
-        "pt_step_len": 60,
-        "smooth_condition": 600,
-    }
-    crv_fld.reset(scenario_test, grid_width)
-    field = crv_fld.get_field(guidance1, constrains)
-    grid = copy.deepcopy(crv_fld.grid)
-    groups_fields[0]["field"] = copy.deepcopy(field)
-    groups_fields[0]["grid"] = copy.deepcopy(grid)
-    crv_fld.field_visualization(field, guidance1)
-
-    # field for group 2
-    grid_width = 20.0
-    guidance2 = {
-        "type": "lines",
-        "params": {
-            "lines": [[[750, 50], [600, 600]], [[600, 600], [50, 570]]],
-            "width": 150,  # influence width
-            "decay_rate": 0.9,  # decay rate of the guidance field along width
-        },
-    }
-    constrains = {
-        "filter_path_n_average": 0,
-        "closed_path_flag": False,
-        "pt_step_len": 60,
-        "smooth_condition": 600,
-    }
-    crv_fld.reset(scenario_test, grid_width)
-    field = crv_fld.get_field(guidance2, constrains)
-    grid = copy.deepcopy(crv_fld.grid)
-    groups_fields[1]["field"] = copy.deepcopy(field)
-    groups_fields[1]["grid"] = copy.deepcopy(grid)
-    crv_fld.field_visualization(field, guidance2)
+                "vl": vl,
+                "hist": [[_x, _y]] * TRAIL_LEN,
+                "pos": np.array([_x, _y], dtype=float),
+            }
+        )
 
     keyboard = pyglet.window.key.KeyStateHandler()
-    while 1:
-        fld_env.viewer.push_handlers(keyboard)
-        if keyboard[pyglet.window.key.Q]:
-            fld_env.set_viewer_field(
-                groups_fields[0]["grid"], groups_fields[0]["field"]
+    while not fld_env.viewer.closed:
+        for i, p in enumerate(flow_particles):
+            v = sample_field_at(
+                p["pos"], groups_fields[0].grid, groups_fields[GROUP_ID].field
             )
-        elif keyboard[pyglet.window.key.W]:
-            fld_env.set_viewer_field(
-                groups_fields[1]["grid"], groups_fields[1]["field"]
+
+            if (
+                v is None
+                # or reached_goal(
+                #     p["pos"], scenario.areas_dict[AllSemanticObjects.EXIT][0]
+                # )
+                or np.linalg.norm(v) < 1e-6
+                or p["pos"][0] < 0
+                or p["pos"][1] < 0
+                or p["pos"][0] > window_size[0]
+                or p["pos"][1] > window_size[1]
+            ):
+                p["pos"] = [-1000, -1000]
+                flow_particles.pop(i)
+                fld_env.viewer.flow_lines.pop(i)
+                continue
+
+            v = v / np.linalg.norm(v)
+            p["pos"] += v * 2.0  # step size
+
+            p["hist"].insert(0, p["pos"].tolist())
+            p["hist"] = p["hist"][:TRAIL_LEN]
+
+            p["vl"].vertices = np.array(p["hist"]).reshape(-1).tolist()
+
+        x = np.random.uniform(
+            0,
+            window_size[0],
+            N_FLOW - len(flow_particles),
+        )
+        y = np.random.uniform(
+            0,
+            window_size[1],
+            N_FLOW - len(flow_particles),
+        )
+        for _x, _y in zip(x, y):
+            vl = fld_env.viewer.add_flow_particle(
+                trail_len=TRAIL_LEN,
+                color=[103, 58, 183],
             )
-        elif keyboard[pyglet.window.key.P]:
-            fld_env.set_viewer_field(None, None)
-        elif keyboard[pyglet.window.key.A]:
-            fld_env.set_viewer_guidance(guidance1)
-        elif keyboard[pyglet.window.key.S]:
-            fld_env.set_viewer_guidance(guidance2)
-        elif keyboard[pyglet.window.key.L]:
-            fld_env.set_viewer_guidance(None)
+
+            flow_particles.append(
+                {
+                    "vl": vl,
+                    "hist": [[_x, _y]] * TRAIL_LEN,
+                    "pos": np.array([_x, _y], dtype=float),
+                }
+            )
 
         fld_env.render()
-        for gid in range(len(groups_fields)):
-            for aid in groups_fields[gid]["agent_ids"]:
-                if (
-                    np.linalg.norm(
-                        np.array(fld_env.agent_current_infor[aid]["pos"])
-                        - np.array(fld_env.agent_current_infor[aid]["goal_pos"])
-                    )
-                    < 50.0
-                    or fld_env.agent_current_infor[aid]["pos"][0] < 0
-                    or fld_env.agent_current_infor[aid]["pos"][0]
-                    > scenario_test["wind_size"][0]
-                    or fld_env.agent_current_infor[aid]["pos"][1] < 0
-                    or fld_env.agent_current_infor[aid]["pos"][1]
-                    > scenario_test["wind_size"][1]
-                ):
-                    ai_params = copy.deepcopy(AGNET_PARAM_DEFAULT)
-                    ai_params["pos"] = [-1000, -1000]
-                    fld_env.set_agent_params(aid, ai_params)
-                    groups_fields[gid]["agent_ids"].remove(aid)
-        fld_env.perform_action(groups_fields)
         time.sleep(0.04)

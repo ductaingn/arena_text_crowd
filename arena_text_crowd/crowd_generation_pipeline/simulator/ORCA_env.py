@@ -72,7 +72,7 @@ class ORCAEnv:
                     [235, 235, 235],
                 ),
             )
-            self.reset_viewer(self.current_scenario, self.agent_current_infor)
+            self.reset_viewer(self.current_scenario)
 
     ######------ functions related to simulator------######
     def sim_prepare(self):

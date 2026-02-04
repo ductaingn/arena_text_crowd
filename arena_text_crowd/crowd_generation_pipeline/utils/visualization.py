@@ -71,6 +71,8 @@ class Viewer(pyglet.window.Window):
         self.agent_vis_inner_list = []
         self.agent_vis_edge_list = []
 
+        self.flow_lines = []
+
     def add_zebra_box(self, box_points):
         vss = box_points
         self.batch_zebrabox_list.append(
@@ -279,6 +281,23 @@ class Viewer(pyglet.window.Window):
         self.particle_circles_ps.append(circle_pos_list)
         return len(self.particle_circles) - 1
 
+    def add_flow_particle(self, trail_len, color):
+        vss = [0.0, 0.0] * trail_len
+        colors = []
+        for i in range(trail_len):
+            alpha = int(255 * (1 - i / (trail_len - 1)))  # head strongest
+            colors += [color[0], color[1], color[2], alpha]
+
+        vl = self.batch.add(
+            trail_len,
+            pyglet.gl.GL_LINE_STRIP,
+            None,
+            ("v2f", vss),
+            ("c4B", colors),
+        )
+        self.flow_lines.append(vl)
+        return vl
+
     def delete_particle(self, particle_id):
         self.particle_circles[particle_id] = None
         self.particle_circles_ps[particle_id] = None
@@ -392,6 +411,9 @@ class Viewer(pyglet.window.Window):
 
         for line_i in self.batch_line_list:
             line_i.draw(pyglet.gl.GL_LINE_STRIP)
+
+        for fl in self.flow_lines:
+            fl.draw(pyglet.gl.GL_LINE_STRIP)
 
         for agent_pos, vertex_list, edge_list in zip(
             self.agent_pos_array, self.batch_agent_list, self.batch_agent_edge_list
