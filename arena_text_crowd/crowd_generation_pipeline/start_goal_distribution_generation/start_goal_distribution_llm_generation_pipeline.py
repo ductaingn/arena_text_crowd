@@ -50,6 +50,7 @@ class StartGoalDistrLLMGenerationPipeline:
         ped_group: PedestrianGroup,
         text_crowd_scenario: Scenario,
         arena_world_description: WorldDescription,
+        group_id: int,
     ):
         sg_distr = np.zeros((*self.sgdistr_size, 2), dtype=np.float32)
         scenario_size = text_crowd_scenario.scenario_config.window_size
@@ -119,7 +120,7 @@ class StartGoalDistrLLMGenerationPipeline:
             center=ctr,
             rotation=0,
             polygon=obj_poly,
-            name=zone.name,
+            name=f"group_{group_id}_start",
         )
         entrance.set_infor()
         entrance.set_obj_graph()
@@ -161,7 +162,7 @@ class StartGoalDistrLLMGenerationPipeline:
             center=ctr,
             rotation=0,
             polygon=obj_poly,
-            name=zone.name,
+            name=f"group_{group_id}_goal",
         )
         exit_.set_infor()
         exit_.set_obj_graph()
@@ -199,9 +200,9 @@ class StartGoalDistrLLMGenerationPipeline:
         )
 
         sgdistr_all: List[np.ndarray] = []
-        for ped_group in llm_response.pedestrian_groups:
+        for i, ped_group in enumerate(llm_response.pedestrian_groups):
             sgdistr = self.get_sg_distr(
-                ped_group, text_crowd_scenario, arena_world_description
+                ped_group, text_crowd_scenario, arena_world_description, i
             )
             sgdistr_all.append(sgdistr)
 

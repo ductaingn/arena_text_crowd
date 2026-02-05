@@ -208,7 +208,7 @@ class CrowdGenerationPipeline:
         # Access velocity at (x,y) with field[group_id, y, x]
         pred_group_fields = np.transpose(pred_group_fields, axes=(0, 2, 1, 3))
 
-        return pred_group_fields, sampled_pedestrians
+        return pred_group_fields, sampled_pedestrians, scenario
 
 
 if __name__ == "__main__":
