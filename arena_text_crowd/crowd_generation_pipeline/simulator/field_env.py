@@ -23,6 +23,7 @@ from ..utils.field import Field, Grid
 from ..input_models.scenario import Scenario
 from .agent import Agent
 from .ORCA_env import ORCAEnv
+from arena_text_crowd.crowd_generation_pipeline.input_models import scenario
 
 
 @attrs.define
@@ -295,22 +296,30 @@ def reached_goal(pos, goal: Exit):
 if __name__ == "__main__":
     import os
     from pathlib import Path
+    import pickle
+    import cv2
     from arena_simulation_setup.tree.World import World
     from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
 
     # Create Text-Crowd scenario from Arena World
-    world_path = Path(
-        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
-    )
-    arena_world = World(path=world_path)
-    scenario, entity_mapping = arena_world_to_text_crowd_scenario(
-        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
-    )
+    # world_path = Path(
+    #     "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    # )
+    # arena_world = World(path=world_path)
+    # scenario, entity_mapping = arena_world_to_text_crowd_scenario(
+    #     arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
+    # )
+    with open(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1/scenarios/tmp5rto5th2 (copy)/text_crowd_scenario___73nh6n.pkl",
+        "rb",
+    ) as file:
+        scenario: Scenario = pickle.load(file)
     window_size = scenario.scenario_config.window_size
     fld_env = FieldEnv(scenario, [], True)
     field = Field(scenario, 16)
-
-    velocity_fields = np.load(f"{os.environ['HOME']}/Desktop/velocity_field.npy")
+    velocity_fields = np.load(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1/scenarios/tmp5rto5th2 (copy)/velocity_field_05huavvq.npy"
+    )
     velocity_fields = np.transpose(velocity_fields, (0, 2, 1, 3))
 
     groups_fields = []
@@ -340,6 +349,17 @@ if __name__ == "__main__":
         )
 
     keyboard = pyglet.window.key.KeyStateHandler()
+    fps = 25
+    width, height = window_size
+    video_writer = cv2.VideoWriter(
+        "/home/linh/ductai_nguyen_ws/velocity_field.mp4",
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        fps,
+        (width, height),
+    )
+    video_duration = 90  # s
+    n_frame = video_duration * fps
+    current_frame = 0
     while not fld_env.viewer.closed:
         for i, p in enumerate(flow_particles):
             v = sample_field_at(
@@ -395,4 +415,14 @@ if __name__ == "__main__":
             )
 
         fld_env.render()
+
+        frame = fld_env.viewer.capture_frame()
+        video_writer.write(frame)
+
         time.sleep(0.04)
+
+        current_frame += 1
+        if current_frame > n_frame:
+            break
+
+    video_writer.release()

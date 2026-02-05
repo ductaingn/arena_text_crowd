@@ -363,17 +363,17 @@ class Viewer(pyglet.window.Window):
         if self.batch_checker is not None:
             self.batch_checker.draw(pyglet.gl.GL_TRIANGLES)
 
-        for doorbox, doorbox_edge in zip(
-            self.batch_door_list, self.batch_door_edge_list
-        ):
-            doorbox.draw(pyglet.gl.GL_TRIANGLE_FAN)
-            doorbox_edge.draw(pyglet.gl.GL_LINE_LOOP)
-
         for zebrabox, zebrabox_edge in zip(
             self.batch_zebrabox_list, self.batch_zebrabox_edge_list
         ):
             zebrabox.draw(pyglet.gl.GL_TRIANGLE_FAN)
             zebrabox_edge.draw(pyglet.gl.GL_LINE_LOOP)
+
+        for doorbox, doorbox_edge in zip(
+            self.batch_door_list, self.batch_door_edge_list
+        ):
+            doorbox.draw(pyglet.gl.GL_TRIANGLE_FAN)
+            doorbox_edge.draw(pyglet.gl.GL_LINE_LOOP)
 
         for vertex_list, edge_list in zip(
             self.batch_obs_list, self.batch_obs_edge_list
@@ -452,6 +452,36 @@ class Viewer(pyglet.window.Window):
             self.flip()
         except:
             self.close()
+
+    def capture_frame(self):
+        self.switch_to()
+
+        width = self.width
+        height = self.height
+
+        # Allocate buffer
+        buffer = (pyglet.gl.GLubyte * (width * height * 3))()
+
+        pyglet.gl.glReadPixels(
+            0,
+            0,
+            width,
+            height,
+            pyglet.gl.GL_RGB,
+            pyglet.gl.GL_UNSIGNED_BYTE,
+            buffer,
+        )
+
+        frame = np.frombuffer(buffer, dtype=np.uint8)
+        frame = frame.reshape(height, width, 3)
+
+        # OpenGL origin is bottom-left
+        frame = np.flipud(frame)
+
+        # RGB → BGR (OpenCV)
+        frame = frame[:, :, ::-1]
+
+        return frame
 
 
 if __name__ == "__main__":
