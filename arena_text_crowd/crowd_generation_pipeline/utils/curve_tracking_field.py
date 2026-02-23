@@ -167,7 +167,7 @@ if __name__ == "__main__":
         PathFinder,
         build_grid_from_world,
     )
-    from ament_index_python import get_package_share_directory
+    # from ament_index_python import get_package_share_directory
 
     from ..input_models.scenario import Scenario, ScenarioConfig
     from ..input_models.constants import AllSemanticObjects
@@ -177,8 +177,11 @@ if __name__ == "__main__":
         get_arena_world_size,
     )
 
-    world_path = os.path.join(
-        get_package_share_directory("arena_simulation_setup"), "worlds", "hospital_1"
+    # world_path = os.path.join(
+    #     get_package_share_directory("arena_simulation_setup"), "worlds", "hospital_1"
+    # )
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
     )
 
     world = World(Path(world_path))
@@ -199,11 +202,7 @@ if __name__ == "__main__":
         wall_thickness=1.0,
         auto_entrance_exit_mode=False,
     )
-    grid_width = 16
-    text_crowd_grid_size = (
-        scenario_size[0] / grid_width,
-        scenario_size[1] / grid_width,
-    )
+    grid_width = 16  # Increase this can lower field generation time
 
     lines = []
     for i in range(len(waypoints) - 1):
@@ -211,12 +210,12 @@ if __name__ == "__main__":
         lines.append(
             [
                 [
-                    waypoint[0] * text_crowd_grid_size[0] / arena_world_size[0],
-                    waypoint[1] * text_crowd_grid_size[1] / arena_world_size[1],
+                    waypoint[0] * scenario_size[0] / arena_world_size[0],
+                    waypoint[1] * scenario_size[1] / arena_world_size[1],
                 ],
                 [
-                    next_waypoint[0] * text_crowd_grid_size[0] / arena_world_size[0],
-                    next_waypoint[1] * text_crowd_grid_size[1] / arena_world_size[1],
+                    next_waypoint[0] * scenario_size[0] / arena_world_size[0],
+                    next_waypoint[1] * scenario_size[1] / arena_world_size[1],
                 ],
             ]
         )
