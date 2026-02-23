@@ -38,6 +38,7 @@ def arena_world_to_text_crowd_scenario(
     *,
     entrances: List[Entrance] | None = None,
     exits: List[Exit] | None = None,
+    auto_entrance_exit_mode: bool = False,
 ) -> Tuple[Scenario, Dict[str, str]]:
     """
     Convert an Arena World into a Text-Crowd Scenario, keep corners and walls only, Arena Zones is considered as entrances and exits.
@@ -96,6 +97,59 @@ def arena_world_to_text_crowd_scenario(
                 exit_.set_infor()
                 exit_.set_obj_graph()
                 scenario.add_object(exit_)
+        elif auto_entrance_exit_mode:
+            # Turn every Arena Zone into a Text-Crowd Entrance/Exit
+            scenario_entrance_range = scenario.scenario_config.objects[
+                AllSemanticObjects.ENTRANCE
+            ].size_range
+            width, height = (
+                clamp(
+                    zone.floor.x_length * scenario_size[0] / arena_world_size[0]
+                    - wall_thickness,
+                    scenario_entrance_range[0],
+                    scenario_entrance_range[1],
+                ),
+                clamp(
+                    zone.floor.y_length * scenario_size[1] / arena_world_size[1]
+                    - wall_thickness,
+                    scenario_entrance_range[0],
+                    scenario_entrance_range[1],
+                ),
+            )
+            ctr = [
+                zone.floor.pos.x * scenario_size[0] / arena_world_size[0],
+                zone.floor.pos.y * scenario_size[1] / arena_world_size[1],
+            ]
+            box = vectors_rotation(
+                np.array(get_box(width, height, [0.0, 0.0])).reshape(-1, 2).tolist(),
+                0,
+            )
+            box = (np.array(box) + np.array(ctr)).tolist()
+            obj_poly = geom.Polygon([[p[0], p[1]] for p in box])
+
+            entrance = Entrance(
+                width=width,
+                height=height,
+                center=ctr,
+                rotation=0,
+                polygon=obj_poly,
+                name=zone.name,
+            )
+            entrance.set_infor()
+            entrance.set_obj_graph()
+            scenario.add_object(entrance)
+
+            exit = Exit(
+                width=width,
+                height=height,
+                center=ctr,
+                rotation=0,
+                polygon=obj_poly,
+                name=zone.name,
+            )
+            exit.set_infor()
+            exit.set_obj_graph()
+            scenario.add_object(exit)
 
         # Convert Arena Wall into Text-Crowd Rectangle
         # Assuming the length of the wall is the corresponding rectangle height,
@@ -218,8 +272,8 @@ def arena_world_to_text_crowd_scenario(
         # rec = Rectangle(polygon=object.bounding_box)
         # scenario.add_object(rec)
 
-    # Hard coded empty space for world `hospital_1`
     empty_spaces = [[17.1, 7.0, [21.5, 25.65]], [4.05, 2.95, [23.525, 15.075]]]
+    # empty_spaces = [[6.0, 22.0, [49, 0, 0]], [3.0, 23.0, [11.0, -1.5]]]
     for zone in empty_spaces:
         height, width, ctr = zone
         height = height * scenario_size[1] / arena_world_size[1]

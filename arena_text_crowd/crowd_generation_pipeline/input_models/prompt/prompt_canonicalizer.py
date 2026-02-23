@@ -6,9 +6,6 @@ import os
 
 from google import genai
 
-from arena_text_crowd.crowd_generation_pipeline.input_models.prompt.start_goal_distr_llm_inference_client import (
-    LLMResponse,
-)
 
 LLM_INSTRUCTION = """
 Instruction:
