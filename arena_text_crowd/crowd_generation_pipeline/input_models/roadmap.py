@@ -10,7 +10,10 @@ from scipy.spatial import distance
 
 import shapely.geometry as geom
 
-from .constants import AllSemanticObjects, PathConstrains
+from arena_text_crowd.crowd_generation_pipeline.utils.field import Constrains
+
+from .scenario import Scenario
+from .constants import AllSemanticObjects, PathConstrains, ParametersMode
 from .semantic.semantic_object import (
     Rectangle,
     Triangle,
@@ -22,6 +25,7 @@ from .semantic.semantic_object import (
 )
 
 from ..utils.utils import poly_collision_check, get_angle
+from arena_text_crowd.crowd_generation_pipeline.input_models import scenario
 
 
 @attrs.define
@@ -30,7 +34,7 @@ class Roadmap:
     zebra_crossing_list: List[ZebraCrossing]
     passages_list: List[Passage]
     areas_dict: Dict[AllSemanticObjects, List[Entrance | Exit]]
-    window_size_sub: Tuple[float, float]
+    window_size_sub: Tuple[Tuple[float, float], Tuple[float, float]]
     sample_num: int = 20
     nb_dis: int = 500
     vertexes: List = attrs.field(init=False)
@@ -88,7 +92,7 @@ class Roadmap:
             )
 
         # add random points
-        rand_range = copy.deepcopy(*self.window_size_sub)
+        rand_range = copy.deepcopy(self.window_size_sub)
         for r_pi in range(self.sample_num):
             while 1:
                 rand_p = [
@@ -151,7 +155,8 @@ class Roadmap:
                     continue
                 if (
                     self.vertexes_idx_in_scenario[nv_i["v"]] is not None
-                    and self.vertexes_idx_in_scenario[nv_i["v"]]["key"] == "areas_list"
+                    and self.vertexes_idx_in_scenario[nv_i["v"]]["key"]
+                    in ["Entrance", "Exit"]
                     and nv_i["v"] != constrains.goal_p
                 ):
                     continue
@@ -166,7 +171,7 @@ class Roadmap:
                     ]
                     if (
                         get_angle(np.array(pre_e), np.array(cur_e))
-                        < constrains["line_angle_lim"]
+                        < constrains.line_angle_lim
                     ):
                         continue
                 inter_ = False
@@ -183,7 +188,7 @@ class Roadmap:
                         np.array(copy.deepcopy(cur_e)).tolist()
                     ).intersects(
                         geom.LineString(np.array(copy.deepcopy(eg_)).tolist()).buffer(
-                            constrains["safe_dis"]
+                            constrains.safe_dis
                         )
                     ):
                         inter_ = True
@@ -195,14 +200,14 @@ class Roadmap:
             nxt_vs_w = []
             for nv_i in nxt_vs_avl:
                 w_ = 1.0
-                if roadmap["vertexes_idx_inS"][nv_i["v"]] is not None:
-                    w_ *= constrains["adaptive_w"]["v_w"]
+                if self.vertexes_idx_in_scenario[nv_i["v"]] is not None:
+                    w_ *= constrains.adaptive_w.v_w
                 else:
-                    w_ *= 1 - constrains["adaptive_w"]["v_w"]
-                if roadmap["edges_idx_inS"][nv_i["edge_id"]] is not None:
-                    w_ *= constrains["adaptive_w"]["e_w"]
+                    w_ *= 1 - constrains.adaptive_w.v_w
+                if self.edges_idx_in_scenario[nv_i["edge_id"]] is not None:
+                    w_ *= constrains.adaptive_w.e_w
                 else:
-                    w_ *= 1 - constrains["adaptive_w"]["e_w"]
+                    w_ *= 1 - constrains.adaptive_w.e_w
                 nxt_vs_w.append(w_)
 
             nxt_vs_new = []
@@ -226,7 +231,7 @@ class Roadmap:
 
         return None, None
 
-    def path_postprocess(self, path_v, path_e, rlx_dis):
+    def path_postprocess(self, path_v, path_e, rlx_dis: int = 30):
         G_vs = copy.deepcopy(self.vertexes)
         G_es = copy.deepcopy(self.edges)
         path_v_ = copy.deepcopy(path_v)
@@ -237,11 +242,12 @@ class Roadmap:
             for vid, v_i in enumerate(G_vs):
                 if vid in path_v_:
                     continue
-                if (
-                    scenario_["roadmap"]["vertexes_idx_inS"][vid] is None
-                    or scenario_["roadmap"]["vertexes_idx_inS"][vid]["key"]
-                    == "areas_list"
-                ):
+                if self.vertexes_idx_in_scenario[
+                    vid
+                ] is None or self.vertexes_idx_in_scenario[vid]["key"] == [
+                    "Entrance",
+                    "Exit",
+                ]:
                     continue
 
                 dist_list = []
@@ -277,3 +283,65 @@ class Roadmap:
                 break
 
         return path_v_, path_e_
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    from arena_simulation_setup.tree.World import World
+    from arena_text_crowd.crowd_generation_pipeline.utils.field import Field
+    from arena_text_crowd.converters.arena_world_to_text_crowd_scenario import (
+        arena_world_to_text_crowd_scenario,
+    )
+    from arena_text_crowd.crowd_generation_pipeline.utils.field import (
+        Constrains,
+        Guidance,
+    )
+
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    )
+    arena_world = World(path=world_path)
+    text_crowd_scenario, arena_entity_to_semantic_entity_map = (
+        arena_world_to_text_crowd_scenario(
+            arena_world=arena_world, wall_thickness=1.0, auto_entrance_exit_mode=True
+        )
+    )
+
+    roadmap = Roadmap(
+        obstacle_dict=text_crowd_scenario.obstacle_dict,
+        zebra_crossing_list=text_crowd_scenario.zebra_crossing_list,
+        passages_list=text_crowd_scenario.passages_list,
+        areas_dict=text_crowd_scenario.areas_dict,
+        window_size_sub=text_crowd_scenario.window_size_sub,
+    )
+
+    constrains = PathConstrains(
+        # mode=ParametersMode.SIMPLE, start_p=(4.0, 2.5), goal_p=(1.5, 1.5)
+        mode=ParametersMode.SIMPLE,
+        start_p=text_crowd_scenario.areas_dict[AllSemanticObjects.ENTRANCE][
+            0
+        ].points_idx_inRM[0],
+        goal_p=text_crowd_scenario.areas_dict[AllSemanticObjects.EXIT][
+            0
+        ].points_idx_inRM[0],
+    )
+
+    path_vs_init, path_es_init = roadmap.sample_path(constrains)
+    if path_vs_init is None or path_es_init is None:
+        raise RuntimeError("Couldn't find path")
+    path_vs, path_es = roadmap.path_postprocess(path_vs_init, path_es_init)
+
+    lines = []
+    for e_i in path_es:
+        lines.append(
+            [roadmap.vertexes[e_i["edge"][0]], roadmap.vertexes[e_i["edge"][1]]]
+        )
+
+    guidance = Guidance(lines=lines, type="lines")
+    field_constrains = Constrains()
+
+    fld = Field(text_crowd_scenario, grid_width=10.0)
+    fld.get_field(guidance, field_constrains)
+    fld.field_visualization(
+        np.zeros((fld.grid.grid_size[0], fld.grid.grid_size[1], 2)), None
+    )

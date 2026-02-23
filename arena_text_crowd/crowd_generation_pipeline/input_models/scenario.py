@@ -60,7 +60,9 @@ class Scenario:
         AllSemanticObjects.EXIT: [],
     }
     extended: bool = attrs.field(init=False, default=False)
-    window_size_sub: Tuple[float, float] = attrs.field(init=False)
+    window_size_sub: Tuple[Tuple[float, float], Tuple[float, float]] = attrs.field(
+        init=False
+    )
 
     @window_size_sub.default
     def _window_size_sub_factory(self):

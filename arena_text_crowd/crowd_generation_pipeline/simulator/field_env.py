@@ -302,25 +302,31 @@ if __name__ == "__main__":
     from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
 
     # Create Text-Crowd scenario from Arena World
-    # world_path = Path(
-    #     "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
-    # )
-    # arena_world = World(path=world_path)
-    # scenario, entity_mapping = arena_world_to_text_crowd_scenario(
-    #     arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
-    # )
-    with open(
-        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1/scenarios/tmp5rto5th2 (copy)/text_crowd_scenario___73nh6n.pkl",
-        "rb",
-    ) as file:
-        scenario: Scenario = pickle.load(file)
+    world_path = Path(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+    )
+    arena_world = World(path=world_path)
+    scenario, entity_mapping = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world,
+        scenario_size=(1024, 1024),
+        wall_thickness=1.0,
+        auto_entrance_exit_mode=True,
+    )
+    # with open(
+    #     "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1/scenarios/tmp5rto5th2 (copy)/text_crowd_scenario___73nh6n.pkl",
+    #     "rb",
+    # ) as file:
+    #     scenario: Scenario = pickle.load(file)
     window_size = scenario.scenario_config.window_size
     fld_env = FieldEnv(scenario, [], True)
     field = Field(scenario, 16)
+    # velocity_fields = np.load(
+    #     "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1/scenarios/tmp5rto5th2 (copy)/velocity_field_05huavvq.npy"
+    # )
+    # velocity_fields = np.transpose(velocity_fields, (0, 2, 1, 3))
     velocity_fields = np.load(
-        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1/scenarios/tmp5rto5th2 (copy)/velocity_field_05huavvq.npy"
+        "/home/linh/ductai_nguyen_ws/text_crowd_velocity_field.npy"
     )
-    velocity_fields = np.transpose(velocity_fields, (0, 2, 1, 3))
 
     groups_fields = []
     for vel_field in velocity_fields:
@@ -329,7 +335,7 @@ if __name__ == "__main__":
     # Visualize velocity field
     N_FLOW = 64 * 64
     TRAIL_LEN = 12
-    GROUP_ID = 1  # Group to be visualized
+    GROUP_ID = 0  # Group to be visualized
     x = np.random.uniform(0, window_size[0], N_FLOW)
     y = np.random.uniform(0, window_size[1], N_FLOW)
     flow_particles = []
@@ -357,7 +363,7 @@ if __name__ == "__main__":
         fps,
         (width, height),
     )
-    video_duration = 90  # s
+    video_duration = 50  # s
     n_frame = video_duration * fps
     current_frame = 0
     while not fld_env.viewer.closed:

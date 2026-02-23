@@ -192,8 +192,11 @@ if __name__ == "__main__":
         "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
     )
     arena_world = World(path=world_path)
-    scenario = arena_world_to_text_crowd_scenario(
-        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
+    scenario, _ = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world,
+        scenario_size=(1024, 1024),
+        wall_thickness=1.0,
+        auto_entrance_exit_mode=True,
     )
     # scenario = Scenario.random(ScenarioConfig())
 

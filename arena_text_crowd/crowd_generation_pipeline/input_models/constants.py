@@ -1,5 +1,5 @@
 import enum
-from typing import Generic, TypeVar, Tuple
+from typing import Generic, List, TypeVar, Tuple
 
 import attrs
 
@@ -90,10 +90,10 @@ class PathConstrains(Generic[ParametersModeT]):
 
     start_p: Tuple[float, float]
     goal_p: Tuple[float, float]
-    line_angle_lim = attrs.field(init=False, default=89.0)
-    safe_dis = attrs.field(init=False, default=100.0)
-    path_len_range = attrs.field(init=False, default=[1, 9])
-    adaptive_w = attrs.field(init=False)
+    line_angle_lim: float = attrs.field(init=False, default=89.0)
+    safe_dis: float = attrs.field(init=False, default=100.0)
+    path_len_range: Tuple[int, int] = attrs.field(init=False, default=(1, 9))
+    adaptive_w: AdaptiveW = attrs.field(init=False)
 
     @adaptive_w.default
     def _adaptive_w_factory(self):
@@ -114,32 +114,32 @@ class RoadmapParams(Generic[ParametersModeT]):
 class DropOutPS:
     mode: ParametersMode  # Currently unused
 
-    action_loc = attrs.field(init=False, default=0.6)
-    obj_loc = attrs.field(init=False, default=0.1)
-    action_dir = attrs.field(init=False, default=0.4)
+    action_loc: float = attrs.field(init=False, default=0.6)
+    obj_loc: float = attrs.field(init=False, default=0.1)
+    action_dir: float = attrs.field(init=False, default=0.4)
 
 
 @attrs.define
 class GroupSizeRange:
     mode: ParametersMode  # Currently unused
 
-    tiny = attrs.field(init=False, default=[2, 3])
-    small = attrs.field(init=False, default=[4, 7])
-    big = attrs.field(init=False, default=[8, 15])
-    large = attrs.field(init=False, default=[16, 30])
+    tiny: Tuple[int, int] = attrs.field(init=False, default=(2, 3))
+    small: Tuple[int, int] = attrs.field(init=False, default=(4, 7))
+    big: Tuple[int, int] = attrs.field(init=False, default=(8, 15))
+    large: Tuple[int, int] = attrs.field(init=False, default=(16, 30))
 
 
 @attrs.define
 class BehaviorParams(Generic[ParametersModeT]):
     mode: ParametersMode  # Currently unused
 
-    mid_scale = attrs.field(init=False, default=0.25)
-    inner_scale = attrs.field(init=False, default=0.66)
-    global_adj_num = attrs.field(init=False, default=8)
-    local_adj_num = attrs.field(init=False, default=8)
-    dir_adj_num = attrs.field(init=False, default=8)
-    drop_out_ps = attrs.field(init=False)
-    group_size_range = attrs.field(init=False)
+    mid_scale: float = attrs.field(init=False, default=0.25)
+    inner_scale: float = attrs.field(init=False, default=0.66)
+    global_adj_num: int = attrs.field(init=False, default=8)
+    local_adj_num: int = attrs.field(init=False, default=8)
+    dir_adj_num: int = attrs.field(init=False, default=8)
+    drop_out_ps: DropOutPS = attrs.field(init=False)
+    group_size_range: GroupSizeRange = attrs.field(init=False)
 
     @drop_out_ps.default
     def _drop_out_ps_factory(self):
@@ -157,28 +157,31 @@ class Field(enum.Enum):
 
 @attrs.define
 class CTFConstrains:
-    filter_path_n_average = attrs.field(init=False, default=0)
-    closed_path_flag = attrs.field(
+    filter_path_n_average: int = attrs.field(init=False, default=0)
+    closed_path_flag: bool = attrs.field(
         init=False,
         default=False,
-        metadata={"description": "distance between two discrete points in path"},
     )
-    pt_step_len = attrs.field(
+    pt_step_len: int = attrs.field(
         init=False,
         default=15,
+        metadata={"description": "distance between two discrete points in path"},
+    )
+    smooth_condition: int = attrs.field(
+        init=False,
+        default=600,
         metadata={
             "description": "smooth condition for trajectory smoothing, should range in [15, 30]"
         },
     )
-    smooth_condition = attrs.field(init=False, default=600)
 
 
 @attrs.define
 class CTFGuidance:
-    type = attrs.field(init=False, default="lines")
-    lines = attrs.field(init=False, default=None)
-    width = attrs.field(init=False, default=100)  # Currently unused
-    decay_rate = attrs.field(init=False, default=0.95)  # Currently unused
+    type: str = attrs.field(init=False, default="lines")
+    lines: List = attrs.field(init=False, default=None)
+    width: int = attrs.field(init=False, default=100)  # Currently unused
+    decay_rate: float = attrs.field(init=False, default=0.95)  # Currently unused
 
 
 @attrs.define
@@ -186,30 +189,30 @@ class FieldParams(Generic[ParametersModeT]):
     mode: ParametersMode  # Currently unused
     field_use: Field = attrs.field(default=Field.CTF)
 
-    reverse_direction = attrs.field(init=False, default=False)
-    vr = attrs.field(init=False, default=1.0)
-    kf = attrs.field(
+    reverse_direction: bool = attrs.field(init=False, default=False)
+    vr: float = attrs.field(init=False, default=1.0)
+    kf: float = attrs.field(
         init=False,
         default=0.05,
         metadata={
             "description": "convergence rate, should be one of (0.05, 0.008, 0.015)"
         },
     )
-    flag_follow_obstacle = attrs.field(init=False, default=True)
-    epsilon = attrs.field(init=False, default=0.0)
-    switch_dist_0 = attrs.field(
+    flag_follow_obstacle: bool = attrs.field(init=False, default=True)
+    epsilon: float = attrs.field(init=False, default=0.0)
+    switch_dist_0: float = attrs.field(
         init=False,
         default=40.0,
         metadata={"description": "should be one of (40.0, 60.0)"},
     )
-    switch_dist = attrs.field(
+    switch_dist: float = attrs.field(
         init=False,
         default=40.0,
         metadata={"description": "convergence rate, should be one of (40.0, 60.0)"},
     )
-    lidar_N = attrs.field(init=False, default=256)
-    constrains_CTF = attrs.field(init=False, default=CTFConstrains())
-    guidance_CTF = attrs.field(init=False, default=CTFGuidance())
+    lidar_N: int = attrs.field(init=False, default=256)
+    constrains_CTF: CTFConstrains = attrs.field(init=False, default=CTFConstrains())
+    guidance_CTF: CTFGuidance = attrs.field(init=False, default=CTFGuidance())
 
 
 @attrs.define

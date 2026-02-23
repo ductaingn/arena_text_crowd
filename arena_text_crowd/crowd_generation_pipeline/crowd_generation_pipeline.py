@@ -465,8 +465,11 @@ if __name__ == "__main__":
         "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
     )
     arena_world = World(path=world_path)
-    scenario = arena_world_to_text_crowd_scenario(
-        arena_world=arena_world, scenario_size=(1024, 1024), wall_thickness=1.0
+    scenario, _ = arena_world_to_text_crowd_scenario(
+        arena_world=arena_world,
+        scenario_size=(1024, 1024),
+        wall_thickness=1.0,
+        auto_entrance_exit_mode=True,
     )
 
     # Generate agents trajectories
@@ -482,7 +485,8 @@ if __name__ == "__main__":
             unet_dir=os.path.join(models_path, "Field-Full-V2/checkpoint-270000/unet")
         ),
     )
-    agents_trajectories = crowd_generation_pipeline.generate(
-        scenario=scenario, prompt="A group of people walking around"
+    prompt = "Depict an emergency evacuation where at first, there're 6 people waiting in line by the pharmacy room door, along the hallway, gradually advance to move forward, then a fire occurs and everyone in every rooms run out of their room, to the hallways, then toward the exit in the main hallways."
+    velocity_field = crowd_generation_pipeline.generate(
+        scenario=scenario, prompt=prompt
     )
-    print(agents_trajectories.shape)
+    np.save("/home/linh/ductai_nguyen_ws/text_crowd_velocity_field.npy", velocity_field)
