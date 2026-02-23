@@ -31,6 +31,20 @@ def clamp(x, min_val, max_val):
     return max(min_val, min(x, max_val))
 
 
+def get_arena_world_size(world_descr: WorldDescription):
+    x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
+    for zone in world_descr.zones:
+        x_min, y_min, x_max, y_max = (
+            min(x_min, *(corner.x for corner in zone.corners)),
+            min(y_min, *(corner.y for corner in zone.corners)),
+            max(x_max, *(corner.x for corner in zone.corners)),
+            max(y_max, *(corner.y for corner in zone.corners)),
+        )
+    world_size = (x_max - x_min, y_max - y_min)
+
+    return world_size
+
+
 def arena_world_to_text_crowd_scenario(
     arena_world: World | WorldDescription,
     scenario_size: Tuple[int, int] = (800, 800),
@@ -70,15 +84,7 @@ def arena_world_to_text_crowd_scenario(
 
     arena_entity_to_semantic_entity_map = {}
     # Get Arena World size
-    x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
-    for zone in arena_world_description.zones:
-        x_min, y_min, x_max, y_max = (
-            min(x_min, *(corner.x for corner in zone.corners)),
-            min(y_min, *(corner.y for corner in zone.corners)),
-            max(x_max, *(corner.x for corner in zone.corners)),
-            max(y_max, *(corner.y for corner in zone.corners)),
-        )
-    arena_world_size = (x_max - x_min, y_max - y_min)
+    arena_world_size = get_arena_world_size(arena_world_description)
 
     scenario = Scenario(ScenarioConfig(window_size=scenario_size))
 

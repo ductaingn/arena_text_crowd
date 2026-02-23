@@ -160,37 +160,69 @@ class CurveTrackingField(Field):
 
 
 if __name__ == "__main__":
+    import os
+    from pathlib import Path
+    from arena_simulation_setup.tree.World import World
+    from arena_hunav_sim_bridge.global_planner.path_finder import (
+        PathFinder,
+        build_grid_from_world,
+    )
+    from ament_index_python import get_package_share_directory
+
     from ..input_models.scenario import Scenario, ScenarioConfig
     from ..input_models.constants import AllSemanticObjects
     from ..input_models.semantic.semantic_object import Rectangle, Triangle, Circle
-
-    scenario_test = Scenario(
-        ScenarioConfig(window_size=[800, 800]),
-        obstacle_dict={
-            AllSemanticObjects.RECTANGLE: [
-                Rectangle(
-                    width=None,
-                    height=None,
-                    vertexes=[[100, 400], [200, 400], [200, 500], [100, 500]],
-                )
-            ],
-            AllSemanticObjects.TRIANGLE: [
-                Triangle(vertexes=[[150, 150], [250, 150], [150, 250]])
-            ],
-            AllSemanticObjects.CIRCLE: [Circle(center=[400.0, 400.0], radius=50.0)],
-        },
+    from arena_text_crowd.converters.arena_world_to_text_crowd_scenario import (
+        arena_world_to_text_crowd_scenario,
+        get_arena_world_size,
     )
 
+    world_path = os.path.join(
+        get_package_share_directory("arena_simulation_setup"), "worlds", "hospital_1"
+    )
+
+    world = World(Path(world_path))
+    arena_world_size = get_arena_world_size(world.load())
+
+    matrix, origin = build_grid_from_world(world.load())
+    path_finder = PathFinder(matrix, origin)
+
+    start = (2.0, 3.0)
+    goal = (15.0, 17.0)
+
+    waypoints = path_finder.get_waypoints(start, goal)
+
+    scenario_size = (1024, 1024)
+    scenario_test, _ = arena_world_to_text_crowd_scenario(
+        arena_world=world,
+        scenario_size=scenario_size,
+        wall_thickness=1.0,
+        auto_entrance_exit_mode=False,
+    )
+    grid_width = 16
+    text_crowd_grid_size = (
+        scenario_size[0] / grid_width,
+        scenario_size[1] / grid_width,
+    )
+
+    lines = []
+    for i in range(len(waypoints) - 1):
+        waypoint, next_waypoint = waypoints[i], waypoints[i + 1]
+        lines.append(
+            [
+                [
+                    waypoint[0] * text_crowd_grid_size[0] / arena_world_size[0],
+                    waypoint[1] * text_crowd_grid_size[1] / arena_world_size[1],
+                ],
+                [
+                    next_waypoint[0] * text_crowd_grid_size[0] / arena_world_size[0],
+                    next_waypoint[1] * text_crowd_grid_size[1] / arena_world_size[1],
+                ],
+            ]
+        )
     guidance = Guidance(
         type="lines",
-        lines=[
-            [[50, 50], [50, 600]],
-            [[50, 600], [300, 600]],
-            [[300, 600], [300, 250]],
-            [[300, 250], [500, 250]],
-            [[500, 250], [500, 450]],
-            [[500, 450], [750, 750]],
-        ],
+        lines=lines,
         width=150,
         decay_rate=0.9,
     )
@@ -201,8 +233,6 @@ if __name__ == "__main__":
         pt_step_len=60,
         smooth_condition=600,
     )
-
-    grid_width = 20.0
 
     crv_fld = CurveTrackingField(
         scenario=scenario_test,
