@@ -41,6 +41,24 @@ from arena_text_crowd.crowd_generation_pipeline.simulator.field_env import (
 
 
 @attrs.define
+class OutputAgent:
+    agent_id: int
+    agent_trajectory: List[List[float]]  # List of (x, y) positions over time
+    agent_actions: List[List[float]]  # List of (vx, vy) actions over time
+
+
+@attrs.define
+class Group:
+    group_id: int
+    agent_list: List[OutputAgent]
+
+
+@attrs.define
+class PipelineOutput:
+    groups: List[Group]
+
+
+@attrs.define
 class CrowdGenerationPipelineConfig:
     # dataset
     data_path: str = "./Dataset/Data_Full_V2/"
@@ -179,6 +197,16 @@ class CrowdGenerationPipeline:
         pred_group_sgdistrs[pred_group_sgdistrs < 0.2] = 0.0
         pred_group_sgdistrs[pred_group_sgdistrs > 0.8] = 1.0
 
+        for group_id in range(group_n):
+            if len(np.where(pred_group_sgdistrs[group_id][:, :, 0] == 1)) == 0:
+                raise ValueError(
+                    f"No start point with confidence > 0.8 for group {group_id}"
+                )
+            if len(np.where(pred_group_sgdistrs[group_id][:, :, 1] == 1)) == 0:
+                raise ValueError(
+                    f"No goal point with confidence > 0.8 for group {group_id}"
+                )
+
         print("Inferring fields...")
         pred_group_fields = self.vel_field_gen_pipeline.inference(
             smaps=np.array(smaps),
@@ -214,12 +242,14 @@ class CrowdGenerationPipeline:
             )
 
         # do simulation
-        return self.get_agent_trajectories(
+        output_trajectories = self.get_agent_trajectories(
             scenario=scenario,
             group_distrs=pred_group_sgdistrs,
             group_sizes=group_sizes,
             group_fields=pred_group_fields,
         )
+
+        return output_trajectories, pred_group_sgdistrs, pred_group_fields
 
     def get_agent_trajectories(
         self,
@@ -360,11 +390,13 @@ class CrowdGenerationPipeline:
 
         video_frms: List[np.ndarray] = []
         step = 0
-        all_agent_trajs = [[] * group_n]
+        output = PipelineOutput(
+            groups=[Group(group_id=gid, agent_list=[]) for gid in range(group_n)]
+        )
         removed_agent_n = 0
         while True:
             if self.generation_pipeline_config.visual:
-                fld_env.render()
+                # fld_env.render()
                 time.sleep(6e-3)
                 if (
                     self.generation_pipeline_config.record_video_path is not None
@@ -399,16 +431,16 @@ class CrowdGenerationPipeline:
                         or fld_env.agent_dict[aid].pos[1]
                         >= scenario.scenario_config.window_size[1]
                     ):
-                        all_agent_trajs[gid].append(
-                            {
-                                "agent_id": aid,
-                                "agent_trajs": np.array(
+                        output.groups[gid].agent_list.append(
+                            OutputAgent(
+                                agent_id=aid,
+                                agent_trajectory=copy.deepcopy(
                                     fld_env.agent_dict[aid].traj_history
                                 ),
-                                "agent_actions": np.array(
+                                agent_actions=copy.deepcopy(
                                     fld_env.agent_dict[aid].action_history
                                 ),
-                            }
+                            )
                         )
                         fld_env.set_agent_position(aid, [-1e5, -1e5])
                         gfields_for_ctrl[gid].agent_ids.remove(aid)
@@ -426,14 +458,16 @@ class CrowdGenerationPipeline:
         # handle the rest agents
         for gid in range(group_n):
             for aid in gfields_for_ctrl[gid].agent_ids:
-                all_agent_trajs[gid].append(
-                    {
-                        "agent_id": aid,
-                        "agent_trajs": np.array(fld_env.agent_dict[aid].traj_history),
-                        "agent_actions": np.array(
+                output.groups[gid].agent_list.append(
+                    OutputAgent(
+                        agent_id=aid,
+                        agent_trajectory=copy.deepcopy(
+                            fld_env.agent_dict[aid].traj_history
+                        ),
+                        agent_actions=copy.deepcopy(
                             fld_env.agent_dict[aid].action_history
                         ),
-                    }
+                    )
                 )
 
         # save record video
@@ -451,7 +485,7 @@ class CrowdGenerationPipeline:
                 video_wt.write(frm)
             video_wt.release()
 
-        return all_agent_trajs
+        return output
 
 
 if __name__ == "__main__":
@@ -459,6 +493,12 @@ if __name__ == "__main__":
     from pathlib import Path
     from arena_simulation_setup.tree.World import World
     from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
+    import debugpy
+
+    # debugpy.listen(("0.0.0.0", 5678))
+    # print("Waiting for debugger attach...")
+    # debugpy.wait_for_client()
+    # print("Debugger attached!")
 
     # Create Text-Crowd scenario from Arena World
     world_path = Path(
@@ -477,7 +517,10 @@ if __name__ == "__main__":
         "/home/linh/ductai_nguyen_ws/Text-Crowd/text_crowd/Language_Crowd_Animation/Models_Server_ForTest"
     )
     crowd_generation_pipeline = CrowdGenerationPipeline(
-        CrowdGenerationPipelineConfig(),
+        CrowdGenerationPipelineConfig(
+            visual=True,
+            record_video_path="/home/linh/ductai_nguyen_ws/Arena_ws/text_crowd_scenario.mp4",
+        ),
         SGDGPConfig(
             unet_dir=os.path.join(models_path, "SgDistr-Full-V1/checkpoint-67000/unet")
         ),
@@ -485,8 +528,29 @@ if __name__ == "__main__":
             unet_dir=os.path.join(models_path, "Field-Full-V2/checkpoint-270000/unet")
         ),
     )
-    prompt = "Depict an emergency evacuation where at first, there're 6 people waiting in line by the pharmacy room door, along the hallway, gradually advance to move forward, then a fire occurs and everyone in every rooms run out of their room, to the hallways, then toward the exit in the main hallways."
-    velocity_field = crowd_generation_pipeline.generate(
-        scenario=scenario, prompt=prompt
+    # prompt = "Depict an emergency evacuation where everyone in every rooms run out of their room, to the hallways, then toward the exit in the main hallways."
+    prompt = "Generate hunav agents data for a simulation A group of 5 constructors rapidly organize themselves into a queue in the main central hallway, by the reception room door. As soon as a spot opens at the front, each person immediately steps forward, advancing in sequence toward the waiting area door. After waiting about 20 seconds, the one in front of the line can enter the reception room, after going to the reception counter, that person goes to main waiting area. The lines continuously compress and move forward as travelers shuffle ahead whenever the person in front moves. A similar queue of 7 people forms in the hallway near the door of the pharmacy room."
+    all_agent_trajs, pred_group_sgdistrs, pred_group_fields = (
+        crowd_generation_pipeline.generate(scenario=scenario, prompt=prompt)
     )
-    np.save("/home/linh/ductai_nguyen_ws/text_crowd_velocity_field.npy", velocity_field)
+
+    np.save(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/start_goal_distrs.npy",
+        pred_group_sgdistrs,
+    )
+    np.save(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/velocity_fields.npy",
+        np.transpose(pred_group_fields, axes=(0, 2, 1, 3)),
+    )
+
+    from arena_text_crowd.converters.text_crowd_output_to_socnavbench_scenario import (
+        text_crowd_output_to_socnavbench_scenario,
+    )
+
+    output_csv_path = "/home/linh/ductai_nguyen_ws/Arena_ws/text_crowd_output.csv"
+    text_crowd_output_to_socnavbench_scenario(
+        pipeline_output=all_agent_trajs,
+        output_csv_path=output_csv_path,
+        text_crowd_scenario=scenario,
+        arena_world=arena_world.load(),
+    )

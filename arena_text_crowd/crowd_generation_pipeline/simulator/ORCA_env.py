@@ -79,7 +79,7 @@ class ORCAEnv:
         dummy_default_agent = Agent()
 
         return rvo2.PyRVOSimulator(
-            timeStep=1,
+            timeStep=1/25.0, # 25 fps
             neighborDist=dummy_default_agent.nb_Dist,
             maxNeighbors=dummy_default_agent.max_nbs,
             timeHorizon=dummy_default_agent.timeH,

@@ -45,14 +45,20 @@ class SemanticMap:
 
         objsm_id = all_obj_smtcs.index(obj_semantic_name)
 
-        # Create one-hot feature
-        feature_ = np.zeros(
-            len(all_obj_smtcs) - 1
-        )  # Because I added PASSAGE, in the original work there was only passage_free and passage_obstacles
-        feature_[objsm_id] = 1
+        return objsm_id
 
-        return feature_
-
+    def mask(self, poly: geom.Polygon, semantic_map_: np.ndarray, grid_size: List[int], transform_: transform.Affine, semantic_object: AllSemanticObjects):
+        mask = features.geometry_mask(
+            [poly],
+            out_shape=(grid_size[1], grid_size[0]),
+            transform=transform_,
+            all_touched=True,
+        )
+        mask = np.flip(mask, axis=0).transpose(1, 0)
+        objsm_id = self.get_feature(semantic_object)
+        # Create one-hot feature vector for the semantic object (support multi-class semantic map)
+        semantic_map_[~mask, objsm_id] = 1
+    
     def from_arena_world(self): ...
 
     def from_text_crowd_scenario(self) -> np.ndarray:
@@ -76,27 +82,21 @@ class SemanticMap:
 
         for passage in self.passages_list:
             poly_free = geom.Polygon(copy.deepcopy(passage.free_space))
-            mask_free = features.geometry_mask(
-                [poly_free],
-                out_shape=(grid_size[1], grid_size[0]),
-                transform=transform_,
-                all_touched=True,
-            )
-            mask_free = np.flip(mask_free, axis=0).transpose(1, 0)
-            semantic_map_[~mask_free] = np.array(
-                self.get_feature(AllSemanticObjects.PASSAGE_FREE)
+            self.mask(
+                poly_free, 
+                semantic_map_, 
+                grid_size, 
+                transform_, 
+                AllSemanticObjects.PASSAGE_FREE
             )
             for obs_id in range(2):
                 poly_obs = geom.Polygon(copy.deepcopy(passage.obstacles[obs_id]))
-                mask_obs = features.geometry_mask(
-                    [poly_obs],
-                    out_shape=(grid_size[1], grid_size[0]),
-                    transform=transform_,
-                    all_touched=True,
-                )
-                mask_obs = np.flip(mask_obs, axis=0).transpose(1, 0)
-                semantic_map_[~mask_obs] = np.array(
-                    self.get_feature(AllSemanticObjects.PASSAGE_OBSTACLE)
+                self.mask(
+                    poly_obs, 
+                    semantic_map_, 
+                    grid_size, 
+                    transform_, 
+                    AllSemanticObjects.PASSAGE_OBSTACLE
                 )
 
         for obstacle in (
@@ -104,34 +104,31 @@ class SemanticMap:
             + self.obstacle_dict[AllSemanticObjects.TRIANGLE]
         ):
             poly_ = geom.Polygon(copy.deepcopy(obstacle.vertexes))
-
-            geom_mask = features.geometry_mask(
-                [poly_],
-                out_shape=(grid_size[1], grid_size[0]),
-                transform=transform_,
-                all_touched=True,
-            )
-            geom_mask = np.flip(geom_mask, axis=0).transpose(1, 0)
-            semantic_map_[~geom_mask] = np.array(
-                self.get_feature(
-                    AllSemanticObjects.RECTANGLE
-                    if isinstance(obstacle, Rectangle)
-                    else AllSemanticObjects.TRIANGLE
-                )
+            self.mask(
+                poly_, 
+                semantic_map_, 
+                grid_size, 
+                transform_, 
+                AllSemanticObjects.RECTANGLE if isinstance(obstacle, Rectangle) else AllSemanticObjects.TRIANGLE
             )
 
         for circle in self.obstacle_dict[AllSemanticObjects.CIRCLE]:
             poly_ = geom.Polygon(copy.deepcopy(circle.edges))
-
-            geom_mask = features.geometry_mask(
-                [poly_],
-                out_shape=(grid_size[1], grid_size[0]),
-                transform=transform_,
-                all_touched=True,
+            self.mask(
+                poly_, 
+                semantic_map_, 
+                grid_size, 
+                transform_, AllSemanticObjects.CIRCLE
             )
-            geom_mask = np.flip(geom_mask, axis=0).transpose(1, 0)
-            semantic_map_[~geom_mask] = np.array(
-                self.get_feature(AllSemanticObjects.CIRCLE)
+
+        for zebra_crossing in self.zebra_crossing_list:
+            poly_ = geom.Polygon(copy.deepcopy(zebra_crossing.whole_box))
+            self.mask(
+                poly_, 
+                semantic_map_, 
+                grid_size, 
+                transform_, 
+                AllSemanticObjects.ZEBRA_CROSSING
             )
 
         for area in (
@@ -139,19 +136,12 @@ class SemanticMap:
             + self.areas_dict[AllSemanticObjects.EXIT]
         ):
             poly_ = geom.Polygon(copy.deepcopy(area.whole_box))
-            geom_mask = features.geometry_mask(
-                [poly_],
-                out_shape=(grid_size[1], grid_size[0]),
-                transform=transform_,
-                all_touched=True,
-            )
-            geom_mask = np.flip(geom_mask, axis=0).transpose(1, 0)
-            semantic_map_[~geom_mask] = np.array(
-                self.get_feature(
-                    AllSemanticObjects.ENTRANCE
-                    if isinstance(area, Entrance)
-                    else AllSemanticObjects.EXIT
-                )
+            self.mask(
+                poly_, 
+                semantic_map_, 
+                grid_size, 
+                transform_, 
+                AllSemanticObjects.ENTRANCE if isinstance(area, Entrance) else AllSemanticObjects.EXIT
             )
 
         return semantic_map_

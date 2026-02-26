@@ -6,6 +6,11 @@ import os
 
 from google import genai
 
+from arena_text_crowd.crowd_generation_pipeline.input_models.constants import (
+    GroupSizeRange,
+    ParametersMode,
+)
+
 
 LLM_INSTRUCTION = """
 Instruction:
@@ -129,8 +134,19 @@ class PromptCanonicalizer:
         return answer
 
     def get_group_size(self, canonicalized_des: str) -> List[int]:
-        # TODO: process this
-        group_n = len(canonicalized_des)
-        group_size = [random.randint(1, 10)] * group_n
+        group_size = []
+        size_range = GroupSizeRange(ParametersMode.SIMPLE)
+
+        for des in canonicalized_des:
+            if "tiny" in des.lower():
+                group_size.append(random.randint(*size_range.tiny))
+            elif "small" in des.lower():
+                group_size.append(random.randint(*size_range.small))
+            elif "big" in des.lower():
+                group_size.append(random.randint(*size_range.big))
+            elif "large" in des.lower():
+                group_size.append(random.randint(*size_range.large))
+            else:
+                group_size.append(random.randint(1, 10))
 
         return group_size
