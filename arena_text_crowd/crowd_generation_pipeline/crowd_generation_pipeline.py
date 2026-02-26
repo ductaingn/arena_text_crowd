@@ -9,8 +9,6 @@ import numpy as np
 
 import cv2
 
-from fastgrab import screenshot
-
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from diffusers import DDPMScheduler, UNet2DConditionModel
@@ -269,7 +267,10 @@ class CrowdGenerationPipeline:
             [124, 79, 13],
             [255, 192, 203],
             [128, 0, 128],
-        ][0:group_n]  # TODO: Remove
+        ]
+        indices = np.arange(len(groups_colors))
+        chosen_indices = np.random.choice(indices, size=group_n, replace=True)
+        groups_colors = [groups_colors[i] for i in chosen_indices]
 
         grid_width = scenario.scenario_config.window_size[0] / len(group_fields[0])
         base_field = Field(scenario, grid_width)
@@ -324,18 +325,16 @@ class CrowdGenerationPipeline:
                         break
             return pos_list
 
-        # set group fields
+        # set group fields (agent_ids are filled after simulator assigns real IDs)
         gfields_for_ctrl: List[GroupField] = []
-        tp = 0
         for gid in range(group_n):
             gfields_for_ctrl.append(
                 GroupField(
-                    agent_ids=list(range(tp, tp + group_sizes[gid])),
+                    agent_ids=[],
                     field=group_fields[gid],
                     grid=base_field.grid,
                 )
             )
-            tp += group_sizes[gid]
 
         # Set all agents' params and reset the scenario
         # Add boundary to scenario_bound
@@ -376,17 +375,25 @@ class CrowdGenerationPipeline:
                 agent_list.append(copy.deepcopy(agent))
 
         ### Start simulation
-        fld_env = FieldEnv(scenario=scenario, agent_list=agent_list)
+        fld_env = FieldEnv(scenario=scenario, agent_list=agent_list, visual=self.generation_pipeline_config.visual)
         fld_env.reset(scenario=copy.deepcopy(scenario_bound))
 
+        # map each group to the real agent IDs assigned by RVO2
+        tp = 0
+        for gid in range(group_n):
+            gfields_for_ctrl[gid].agent_ids = [
+                agent_list[idx].id for idx in range(tp, tp + group_sizes[gid])
+            ]
+            tp += group_sizes[gid]
+
         # warm up
-        # for _ in range(self.generation_pipeline_config.warm_up_steps):
-        #     fld_env.perform_action_ORCAEnv(np.zeros((agent_n, 2)).tolist())
-        # for agt_id in range(agent_n):
-        #     fld_env.agent_dict[agt_id].traj_history = fld_env.agent_dict[
-        #         agt_id
-        #     ].traj_history[: -self.generation_pipeline_config.warm_up_steps]
-        #     assert len(fld_env.agent_dict[agt_id].traj_history) == 0
+        for _ in range(self.generation_pipeline_config.warm_up_steps):
+            fld_env.perform_action_ORCAEnv(np.zeros((agent_n, 2)).tolist())
+        for agt_id in fld_env.agent_ids:
+            fld_env.agent_dict[agt_id].traj_history = fld_env.agent_dict[
+                agt_id
+            ].traj_history[: -self.generation_pipeline_config.warm_up_steps]
+            assert len(fld_env.agent_dict[agt_id].traj_history) == 0
 
         video_frms: List[np.ndarray] = []
         step = 0
@@ -396,28 +403,18 @@ class CrowdGenerationPipeline:
         removed_agent_n = 0
         while True:
             if self.generation_pipeline_config.visual:
-                # fld_env.render()
+                fld_env.render()
                 time.sleep(6e-3)
                 if (
                     self.generation_pipeline_config.record_video_path is not None
-                    and fld_env.viewer.closed
+                    and not fld_env.viewer.closed
                 ):
-                    loc = fld_env.viewer.get_location()
-                    im_cv2 = np.array(
-                        screenshot.Screenshot().capture(
-                            (
-                                loc[0],
-                                loc[1],
-                                fld_env.viewer.width,
-                                fld_env.viewer.height,
-                            )
-                        )
-                    )[:, :, 0:3]
+                    im_cv2 = fld_env.viewer.capture_frame()
                     video_frms.append(im_cv2)
 
             # remove agents that reach the goal or get out of the scenario, and record its trajectory
             for gid in range(group_n):
-                for aid in gfields_for_ctrl[gid].agent_ids:
+                for aid in list(gfields_for_ctrl[gid].agent_ids):
                     if (
                         np.linalg.norm(
                             np.array(fld_env.agent_dict[aid].pos)
@@ -449,10 +446,10 @@ class CrowdGenerationPipeline:
             fld_env.perform_action_fast(gfields_for_ctrl)
 
             step += 1
-            if removed_agent_n >= agent_n or step > 1000:  # TODO: Manage lifetime
+            if removed_agent_n >= agent_n or step > 5000:
                 break
 
-            if self.generation_pipeline_config.visual and not fld_env.viewer.closed:
+        if self.generation_pipeline_config.visual and not fld_env.viewer.closed:
                 fld_env.viewer.close()
 
         # handle the rest agents
@@ -477,8 +474,8 @@ class CrowdGenerationPipeline:
         ):
             video_wt = cv2.VideoWriter(
                 self.generation_pipeline_config.record_video_path,
-                cv2.VideoWriter_fourcc("P", "I", "M", "1"),
-                280 / self.generation_pipeline_config.agent_prefV,
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                25.0,
                 (fld_env.viewer.width, fld_env.viewer.height),
             )
             for frm in video_frms:
@@ -538,9 +535,11 @@ if __name__ == "__main__":
         "/home/linh/ductai_nguyen_ws/Arena_ws/start_goal_distrs.npy",
         pred_group_sgdistrs,
     )
+
+    pred_group_fields = np.transpose(pred_group_fields, axes=(0, 2, 1, 3))
     np.save(
         "/home/linh/ductai_nguyen_ws/Arena_ws/velocity_fields.npy",
-        np.transpose(pred_group_fields, axes=(0, 2, 1, 3)),
+        pred_group_fields,
     )
 
     from arena_text_crowd.converters.text_crowd_output_to_socnavbench_scenario import (

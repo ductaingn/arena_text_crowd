@@ -30,6 +30,8 @@ class ORCAEnv:
         self.sensor = None
         self.current_scenario = None
         self.agent_dict: Dict[int, Agent] = {}  # {agent id in RVO2 simulator: Agent}
+        self.agent_ids: List[int] = []
+        self.agent_id_to_index: Dict[int, int] = {}
         self.time_step = 0
 
         self.sim = self.sim_prepare()
@@ -37,6 +39,11 @@ class ORCAEnv:
             agent_id = self.add_agent_sim(*agent.pos)  # TODO: Vefiry
             agent.id = agent_id
             self.agent_dict.update({agent_id: agent})
+
+        self.agent_ids = sorted(self.agent_dict.keys())
+        self.agent_id_to_index = {
+            agent_id: idx for idx, agent_id in enumerate(self.agent_ids)
+        }
 
         self.reset(
             scenario=copy.deepcopy(scenario),
@@ -101,10 +108,14 @@ class ORCAEnv:
     def perform_action(self, actions):
         pre_ps = self.get_current_positions()
         actions = np.array(actions).reshape(-1, 2)
+        if len(actions) != self.agent_num:
+            raise ValueError(
+                f"Expected {self.agent_num} actions, but got {len(actions)}"
+            )
         # perform action
-        for agent_id in self.agent_dict.keys():
-            dx = actions[agent_id][0]
-            dy = actions[agent_id][1]
+        for idx, agent_id in enumerate(self.agent_ids):
+            dx = actions[idx][0]
+            dy = actions[idx][1]
             len_a = math.sqrt(dx * dx + dy * dy)
             if len_a > self.agent_dict[agent_id].maxSpd:
                 dx *= self.agent_dict[agent_id].maxSpd / len_a
@@ -114,11 +125,11 @@ class ORCAEnv:
 
         # update infor
         self.time_step += 1
-        for agent_id in self.agent_dict.keys():
+        for idx, agent_id in enumerate(self.agent_ids):
             curr_p_i = self.sim.getAgentPosition(agent_id)
             self.agent_dict[agent_id].pos = np.array(curr_p_i).tolist()
             self.agent_dict[agent_id].add_history(
-                pre_ps[agent_id].tolist(), actions[agent_id].tolist()
+                pre_ps[idx].tolist(), actions[idx].tolist()
             )
 
     ######------ functions related to agent setting ------######
@@ -149,7 +160,7 @@ class ORCAEnv:
     ######------ functions related to agent information ------######
     def get_current_positions(self):
         current_positions = []
-        for agent_id in self.agent_dict.keys():
+        for agent_id in self.agent_ids:
             pos = self.sim.getAgentPosition(agent_id)
             current_positions.append([pos[0], pos[1]])
         current_positions = np.array(current_positions)
@@ -157,7 +168,7 @@ class ORCAEnv:
         return current_positions
 
     def update_current_positions(self):
-        for agent_id in self.agent_dict.keys():
+        for agent_id in self.agent_ids:
             pos = self.sim.getAgentPosition(agent_id)
             self.agent_dict[agent_id].pos = [pos[0], pos[1]]
 
@@ -220,9 +231,7 @@ class ORCAEnv:
             )
 
         # set agents
-        for agent_id in sorted(
-            self.agent_dict.items()
-        ):  # Ensure the self.viewer.agent_pos_array's order aligns with the agent ID
+        for agent_id in self.agent_ids:
             agent = self.agent_dict[agent_id]
             self.viewer.add_agent(
                 pos=tuple(np.array(agent.pos) * self.draw_scale),
@@ -243,17 +252,17 @@ class ORCAEnv:
             self.viewer.sensor = self.sensor
 
     def render(self):
-        for agent_id in sorted(self.agent_dict.keys()):
+        for idx, agent_id in enumerate(self.agent_ids):
             agent = self.agent_dict[agent_id]
-            self.viewer.agent_pos_array[agent_id] = (
+            self.viewer.agent_pos_array[idx] = (
                 np.array(agent.pos) * self.draw_scale
             ).tolist()
             if agent.draw_goal:
-                self.viewer.goal_pos_array[agent_id] = (
+                self.viewer.goal_pos_array[idx] = (
                     np.array(agent.goal_pos) * self.draw_scale
                 ).tolist()
             else:
-                self.viewer.goal_pos_array[agent_id] = None
+                self.viewer.goal_pos_array[idx] = None
         self.viewer.render()
 
 

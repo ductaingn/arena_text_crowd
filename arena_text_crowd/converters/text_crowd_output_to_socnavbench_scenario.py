@@ -56,3 +56,5 @@ def text_crowd_output_to_socnavbench_scenario(
         writer.writerow(row_ys)
 
     print(f"Successfully converted trajectories to {output_csv_path}")
+    scenario_duration = max(row_frames)*(1/25.0)  # Assuming 25 FPS
+    print(f"Total frames: {max(row_frames)}, Total agents: {len(set(row_ids))}, Scenario duration: {scenario_duration:.2f}s")

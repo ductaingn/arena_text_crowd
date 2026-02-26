@@ -47,19 +47,15 @@ class FieldEnv(ORCAEnv):
             visual=visual,
             draw_scale=draw_scale,
         )
-        self.agent_prefvs = []
-        for agent_id in sorted(self.agent_dict.keys()):
-            self.agent_prefvs.append(
-                self.agent_dict[agent_id].pref_speed
-            )  # TODO: Verify
+        self.agent_prefvs = np.array(
+            [self.agent_dict[agent_id].pref_speed for agent_id in self.agent_ids]
+        )
 
     def reset(self, scenario: Scenario):
         super(FieldEnv, self).reset(scenario)
-        self.agent_prefvs = []
-        for agent_id in sorted(self.agent_dict.keys()):
-            self.agent_prefvs.append(
-                self.agent_dict[agent_id].pref_speed
-            )  # TODO: Verify
+        self.agent_prefvs = np.array(
+            [self.agent_dict[agent_id].pref_speed for agent_id in self.agent_ids]
+        )
 
     def perform_action_ORCAEnv(self, actions):
         super(FieldEnv, self).perform_action(actions)
@@ -76,6 +72,7 @@ class FieldEnv(ORCAEnv):
             grid_size = grid_gi.grid_size
             grid_infor = grid_gi.grid_infor
             for agent_id in aids_gi:
+                agent_idx = self.agent_id_to_index[agent_id]
                 agent_pos = self.agent_dict[agent_id].pos
                 assert (
                     0.0
@@ -180,9 +177,9 @@ class FieldEnv(ORCAEnv):
                             break
 
                 if np.linalg.norm(agt_action) < 1e-6:
-                    agent_actions[agent_id] = np.array(agt_action)
+                    agent_actions[agent_idx] = np.array(agt_action)
                 else:
-                    agent_actions[agent_id] = (
+                    agent_actions[agent_idx] = (
                         np.array(agt_action) / np.linalg.norm(np.array(agt_action))
                     ) * agent_prefV
         print(f"time in computing actions: {time.time() - start_time}")
@@ -199,6 +196,7 @@ class FieldEnv(ORCAEnv):
         # get action for each agent based on the field of each group
         for group_idx, _ in enumerate(group_fields):
             aids_gi = group_fields[group_idx].agent_ids
+            aid_indices = [self.agent_id_to_index[aid] for aid in aids_gi]
             field_gi = group_fields[group_idx].field
             grid_gi = group_fields[group_idx].grid
             grid_width = grid_gi.grid_width
@@ -209,7 +207,7 @@ class FieldEnv(ORCAEnv):
             zp_0 = field_gi[:, :, 0]
             zp_1 = field_gi[:, :, 1]
 
-            agent_ps_gi = all_agent_positions[aids_gi]
+            agent_ps_gi = all_agent_positions[aid_indices]
             actions_gi = np.concatenate(
                 (
                     interp_grid_fast(
@@ -236,11 +234,11 @@ class FieldEnv(ORCAEnv):
             actions_gi = (
                 actions_gi
                 / np.linalg.norm(actions_gi, axis=1).reshape(-1, 1)
-                * (np.array(self.agent_prefvs)[aids_gi]).reshape(-1, 1)
+                * (self.agent_prefvs[aid_indices]).reshape(-1, 1)
             )
             actions_gi = np.nan_to_num(actions_gi, 0.0)
 
-            agent_actions[aids_gi] = actions_gi
+            agent_actions[aid_indices] = actions_gi
 
         # perform actions
         self.perform_action_ORCAEnv(agent_actions.tolist())

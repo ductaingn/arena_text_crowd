@@ -160,7 +160,7 @@ class Field:
                 arrow = (arrow - vec / 2) * grid_width
                 arrow += np.array(self.grid.grid_infor[i][j]["center"])
                 arrows.append(arrow)
-                arrow_colors.append([0, 0, 0])
+                arrow_colors.append([76, 175, 80])
         viewer.set_arrows(np.array(arrows), np.array(arrow_colors))
 
         if guidance is not None and guidance.type == "lines":
@@ -172,8 +172,19 @@ class Field:
                 traj_colors.append([255, 0, 0])
             viewer.set_traj(np.array(trajs), np.array(traj_colors))
 
+        # i = 0
         while 1:
             viewer.render()
+            # i += 1
+            # if i == 50:
+            #     import cv2
+
+            #     viewer.switch_to()
+            #     viewer.dispatch_events()
+            #     viewer.dispatch_event("on_draw")
+            #     im_cv2 = viewer.capture_frame()
+            #     cv2.imwrite("/home/linh/ductai_nguyen_ws/velocity_field.jpg", im_cv2)
+            #     break
             if viewer.closed:
                 break
 

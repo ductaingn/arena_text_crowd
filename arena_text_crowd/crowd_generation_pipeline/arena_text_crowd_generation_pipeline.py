@@ -10,7 +10,6 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from diffusers import DDPMScheduler, UNet2DConditionModel
 
-from arena_text_crowd.crowd_generation_pipeline.input_models import prompt
 from arena_text_crowd.crowd_generation_pipeline.input_models.prompt.start_goal_distr_llm_inference_client import (
     LLMResponse,
 )
@@ -238,12 +237,16 @@ if __name__ == "__main__":
     )
 
     prompt = "People run out of their room, to the hallways, and through the main hallway entrance. There should be about 5 people in each room."
-    pred_velocity_field, sampled_peds = crowd_generation_pipeline.generate(
+    pred_velocity_field, sampled_peds, _ = crowd_generation_pipeline.generate(
         prompt=prompt,
         scenario=scenario,
         arena_world_description=arena_world.load(),
         arena_entity_to_semantic_entity_map=entity_mapping,
         show=True,
+    )
+    np.save(
+        "/home/linh/ductai_nguyen_ws/Arena_ws/velocity_fields.npy",
+        pred_velocity_field,
     )
     print(pred_velocity_field.shape)
     print(f"Sampled pedestrians: {sampled_peds}")
