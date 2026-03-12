@@ -63,6 +63,11 @@ class ArenaVelocityFieldGenerationPipeline:
             centroids.append(tuple(group["centroid"].tolist()))
 
         return centroids
+    
+    def clamp_point(self, pt, world_size, eps=1e-3):
+        x = np.clip(pt[0], 0.0, world_size[0] - eps)
+        y = np.clip(pt[1], 0.0, world_size[1] - eps)
+        return (x, y)
 
     def generate(
         self,
@@ -70,6 +75,7 @@ class ArenaVelocityFieldGenerationPipeline:
         show: bool = False,
     ):
         print("Building grid from world...")
+
         matrix, origin = build_grid_from_world(self.arena_world_description)
         arena_world_size = get_arena_world_size(self.arena_world_description)
         groups_centroids = self.get_groups_start_centroids(response_schema)
@@ -89,12 +95,12 @@ class ArenaVelocityFieldGenerationPipeline:
         print("Generating velocity field...")
         start_time = time.time()
         pred_group_fields = []
-        for start in starts:
+        for g_id, start in enumerate(starts):
             matrix = copy.deepcopy(matrix)
             origin = copy.deepcopy(origin)
             path_finder = PathFinder(matrix, origin)
 
-            waypoints = path_finder.get_waypoints(start, goal)
+            waypoints = path_finder.get_waypoints(self.clamp_point(start, arena_world_size), self.clamp_point(goal, arena_world_size))
 
             lines = []
             for i in range(len(waypoints) - 1):
@@ -111,6 +117,7 @@ class ArenaVelocityFieldGenerationPipeline:
                         ],
                     ]
                 )
+            assert len(lines) > 0, f"Can not find path between {start} and {goal} for group {g_id}. Check if these points are in walkable zones, or if there're feasible path between them."
             guidance = Guidance(
                 type="lines",
                 lines=lines,
@@ -158,10 +165,13 @@ if __name__ == "__main__":
     from pathlib import Path
     from arena_simulation_setup.tree.World import World
     from arena_text_crowd.converters import arena_world_to_text_crowd_scenario
-
+    import json
+    import debugpy
+    debugpy.listen(("0.0.0.0", 5769))
+    debugpy.wait_for_client()
     # Create Text-Crowd scenario from Arena World
     world_path = Path(
-        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/hospital_1"
+        "/home/linh/ductai_nguyen_ws/Arena_ws/install/arena_simulation_setup/share/arena_simulation_setup/worlds/office_1"
     )
     arena_world = World(path=world_path)
 
@@ -169,8 +179,59 @@ if __name__ == "__main__":
     generation_pipeline = ArenaVelocityFieldGenerationPipeline(
         ArenaVelocityFieldGenerationPipelineConfig(), arena_world.load()
     )
-    starts = [(1.0, 2.0)]
-    goals = [(15.0, 17.0)]
+    response_schema= EmergencyResponseSchema.model_validate_json(
+        json.dumps({
+            "hunav_agents": [
+                {
+                    "name": "hunav_1",
+                    "pos": [
+                        5.0,
+                        12.0,
+                        0.0
+                    ],
+                    "type": "adult",
+                    "model": "male_adult_construction_01"
+                },
+                {
+                    "name": "hunav_2",
+                    "pos": [
+                        6.5,
+                        11.5,
+                        0.0
+                    ],
+                    "type": "adult",
+                    "model": "female_adult_business_02"
+                }
+            ],
+            "single_agent_nodes": [
+                {
+                    "name": "FollowVelocityField",
+                    "attributes": {
+                        "agent_name": "hunav_1",
+                        "velocity_field_group_id": 0,
+                        "time_step": 0.1,
+                        "tolerance": 0.5
+                    },
+                    "order": 0
+                },
+                {
+                    "name": "FollowVelocityField",
+                    "attributes": {
+                        "agent_name": "hunav_2",
+                        "velocity_field_group_id": 0,
+                        "time_step": 0.1,
+                        "tolerance": 0.5
+                    },
+                    "order": 0
+                }
+            ],
+            "multi_agent_nodes": [],
+            "exit_pos": [
+                58.0,
+                12.0
+            ]
+        })
+    )
 
-    pred_velocity_field = generation_pipeline.generate(starts, goals)
+    pred_velocity_field = generation_pipeline.generate(response_schema)
     print(pred_velocity_field.shape)
